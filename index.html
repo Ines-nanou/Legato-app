@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Générateur de contrats — Legato SA</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background: #f5f5f4; color: #1c1917; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .card { background: #fff; border: 1px solid #e7e5e4; border-radius: 16px; max-width: 460px; width: 100%; padding: 36px 32px; box-shadow: 0 1px 12px rgba(0,0,0,0.05); }
+    h1 { font-size: 21px; font-weight: 650; margin-bottom: 6px; }
+    .sub { font-size: 13px; color: #78716c; margin-bottom: 28px; line-height: 1.5; }
+    .drop { border: 2px dashed #d6d3d1; border-radius: 12px; padding: 28px 20px; text-align: center; cursor: pointer; transition: all .15s; }
+    .drop:hover, .drop.over { border-color: #1c1917; background: #fafaf9; }
+    .drop svg { width: 28px; height: 28px; stroke: #a8a29e; margin-bottom: 10px; }
+    .drop .main { font-size: 14px; color: #44403c; font-weight: 500; }
+    .drop .hint { font-size: 12px; color: #a8a29e; margin-top: 4px; }
+    .file { display: flex; align-items: center; gap: 10px; background: #f5f5f4; border-radius: 10px; padding: 12px 14px; margin-top: 14px; font-size: 13px; color: #44403c; }
+    .file svg { width: 18px; height: 18px; stroke: #78716c; flex: 0 0 auto; }
+    .file .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .note { font-size: 11px; color: #a8a29e; margin: 16px 0 20px; line-height: 1.5; }
+    button { width: 100%; border: none; border-radius: 10px; padding: 14px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: opacity .15s; }
+    .btn-primary { background: #1c1917; color: #fff; }
+    .btn-primary:disabled { opacity: .35; cursor: default; }
+    .btn-secondary { background: #fff; color: #44403c; border: 1px solid #e7e5e4; margin-top: 12px; }
+    .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; font-size: 13px; border-radius: 10px; padding: 12px 14px; margin-bottom: 20px; display: flex; gap: 8px; line-height: 1.45; }
+    .error svg { width: 16px; height: 16px; stroke: #dc2626; flex: 0 0 auto; margin-top: 1px; }
+    .success { text-align: center; }
+    .success .check { width: 46px; height: 46px; stroke: #16a34a; margin: 0 auto 14px; }
+    .success h2 { font-size: 17px; margin-bottom: 6px; }
+    .success p { font-size: 13px; color: #78716c; margin-bottom: 22px; line-height: 1.5; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div id="view-form">
+      <h1>Générateur de contrats</h1>
+      <p class="sub">Déposez le devis du prestataire. Le contrat complet (page de garde, contrat en 2 exemplaires, conditions générales et devis) se génère automatiquement, prêt à imprimer.</p>
+
+      <div id="error" class="error hidden">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span id="error-text"></span>
+      </div>
+
+      <div id="drop" class="drop">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <div class="main">Déposez le devis ici</div>
+        <div class="hint">ou cliquez pour le sélectionner (PDF)</div>
+      </div>
+      <input id="file-input" type="file" accept="application/pdf" class="hidden" />
+
+      <div id="file-display" class="file hidden">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span class="name" id="file-name"></span>
+      </div>
+
+      <p class="note">Les conditions générales Legato SA sont déjà intégrées. Le devis est ajouté en deux exemplaires sans modification.</p>
+
+      <button id="generate" class="btn-primary" disabled>
+        <span id="generate-label">Générer le contrat</span>
+      </button>
+    </div>
+
+    <div id="view-success" class="success hidden">
+      <svg class="check" viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      <h2>Contrat généré</h2>
+      <p id="success-info">Le PDF complet a été téléchargé. Vous pouvez l'imprimer directement.</p>
+      <button id="download-again" class="btn-primary">Télécharger à nouveau</button>
+      <button id="reset" class="btn-secondary">Nouveau contrat</button>
+    </div>
+  </div>
+
+  <script>
+    let selectedFile = null;
+    let lastBlobUrl = null;
+    let lastFilename = "contrat.pdf";
+
+    const drop = document.getElementById("drop");
+    const fileInput = document.getElementById("file-input");
+    const fileDisplay = document.getElementById("file-display");
+    const fileName = document.getElementById("file-name");
+    const generateBtn = document.getElementById("generate");
+    const generateLabel = document.getElementById("generate-label");
+    const errorBox = document.getElementById("error");
+    const errorText = document.getElementById("error-text");
+    const viewForm = document.getElementById("view-form");
+    const viewSuccess = document.getElementById("view-success");
+    const successInfo = document.getElementById("success-info");
+
+    function showError(msg) {
+      errorText.textContent = msg;
+      errorBox.classList.remove("hidden");
+    }
+    function clearError() { errorBox.classList.add("hidden"); }
+
+    function setFile(f) {
+      if (!f) return;
+      if (f.type !== "application/pdf" && !f.name.toLowerCase().endsWith(".pdf")) {
+        showError("Merci de déposer un fichier PDF.");
+        return;
+      }
+      clearError();
+      selectedFile = f;
+      fileName.textContent = f.name;
+      fileDisplay.classList.remove("hidden");
+      generateBtn.disabled = false;
+    }
+
+    drop.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", (e) => setFile(e.target.files[0]));
+    ["dragenter","dragover"].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+    ["dragleave","drop"].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+    drop.addEventListener("drop", (e) => { if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); });
+
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => { const res = r.result || ""; const c = res.indexOf(","); resolve(c !== -1 ? res.slice(c + 1) : res); };
+        r.onerror = () => reject(new Error("Lecture du fichier échouée"));
+        r.readAsDataURL(file);
+      });
+    }
+
+    generateBtn.addEventListener("click", async () => {
+      if (!selectedFile) return;
+      clearError();
+      generateBtn.disabled = true;
+      generateLabel.textContent = "Génération en cours…";
+      const spinner = document.createElement("span");
+      spinner.className = "spinner";
+      generateBtn.insertBefore(spinner, generateBtn.firstChild);
+
+      try {
+        const b64 = await fileToBase64(selectedFile);
+        const resp = await fetch("/api/generer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ devisBase64: b64 }),
+        });
+
+        if (!resp.ok) {
+          let m = "La génération a échoué.";
+          try { const j = await resp.json(); if (j.error) m = j.error; } catch (e) {}
+          throw new Error(m);
+        }
+
+        const blob = await resp.blob();
+        const cd = resp.headers.get("Content-Disposition") || "";
+        const match = cd.match(/filename="(.+?)"/);
+        lastFilename = match ? match[1] : "Contrat_Legato.pdf";
+        if (lastBlobUrl) URL.revokeObjectURL(lastBlobUrl);
+        lastBlobUrl = URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = lastBlobUrl;
+        a.download = lastFilename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        viewForm.classList.add("hidden");
+        viewSuccess.classList.remove("hidden");
+      } catch (err) {
+        showError(err.message || "Erreur inattendue.");
+      } finally {
+        spinner.remove();
+        generateLabel.textContent = "Générer le contrat";
+        generateBtn.disabled = false;
+      }
+    });
+
+    document.getElementById("download-again").addEventListener("click", () => {
+      if (!lastBlobUrl) return;
+      const a = document.createElement("a");
+      a.href = lastBlobUrl; a.download = lastFilename;
+      document.body.appendChild(a); a.click(); a.remove();
+    });
+
+    document.getElementById("reset").addEventListener("click", () => {
+      selectedFile = null;
+      fileInput.value = "";
+      fileDisplay.classList.add("hidden");
+      generateBtn.disabled = true;
+      viewSuccess.classList.add("hidden");
+      viewForm.classList.remove("hidden");
+      clearError();
+    });
+  </script>
+</body>
+</html>
