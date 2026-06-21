@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "functions": {
+    "api/generer.js": {
+      "maxDuration": 60,
+      "includeFiles": "assets/**"
+    }
+  },
+  "rewrites": [
+    { "source": "/", "destination": "/index.html" }
+  ]
+}
