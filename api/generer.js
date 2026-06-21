@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, cmyk } from "pdf-lib";
 import fs from "fs";
 import path from "path";
 
@@ -16,6 +16,9 @@ const PROJET = {
   moTel: "024 426 77 00",
   moEmail: "info@legato-eg.ch",
 };
+
+// Vert Legato officiel = CMYK exact du logo vectoriel (0.78, 0, 0.67, 0)
+const VERT_LEGATO = cmyk(0.78, 0, 0.67, 0);
 
 const PROMPT = `Tu analyses un devis PDF d'une entreprise sous-traitante adress\u00e9 \u00e0 Legato SA (ma\u00eetre d'ouvrage, entreprise g\u00e9n\u00e9rale de construction).
 
@@ -75,10 +78,23 @@ function wrap(text, size, maxW, font) {
   return lines;
 }
 
+// Charge le logo PNG (rectangle vert officiel) une seule fois
+async function chargerLogo(doc) {
+  try {
+    const logoPath = path.join(process.cwd(), "assets", "logo_legato.png");
+    const logoBytes = fs.readFileSync(logoPath);
+    return await doc.embedPng(logoBytes);
+  } catch (e) {
+    console.error("Logo non charg\u00e9:", e.message);
+    return null;
+  }
+}
+
 async function buildPdf(fields, devisBytes) {
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const logo = await chargerLogo(doc);
   const W = 595.28, H = 841.89, M = 56;
   const black = rgb(0.1, 0.1, 0.1), gray = rgb(0.42, 0.42, 0.42), light = rgb(0.95, 0.95, 0.95);
   const today = dateAujourdhui();
@@ -86,6 +102,14 @@ async function buildPdf(fields, devisBytes) {
   // ---- PAGE 1 : page de garde ----
   {
     const p = doc.addPage([W, H]);
+
+    // Logo officiel en haut \u00e0 droite (largeur ~20% de la page, proportions natives conserv\u00e9es)
+    if (logo) {
+      const logoW = 0.20 * W;
+      const logoH = logoW * (logo.height / logo.width);
+      p.drawImage(logo, { x: W - M - logoW, y: H - 24 - logoH, width: logoW, height: logoH });
+    }
+
     p.drawText(PROJET.moNom, { x: M, y: H - 70, size: 11, font: bold, color: black });
     p.drawText(PROJET.moAdresse, { x: M, y: H - 85, size: 9, font, color: gray });
     p.drawText(PROJET.moNpaVille, { x: M, y: H - 97, size: 9, font, color: gray });
@@ -111,29 +135,15 @@ async function buildPdf(fields, devisBytes) {
     p.drawText(PROJET.moNom, { x: M, y: y - 42, size: 10, font: bold, color: black });
   }
 
-  // ---- PAGE 2 : instructions ----
-  {
-    const p = doc.addPage([W, H]);
-    p.drawText("Action \u00e0 effectuer", { x: M, y: H - 70, size: 16, font: bold, color: black });
-    p.drawLine({ start: { x: M, y: H - 80 }, end: { x: W - M, y: H - 80 }, thickness: 1, color: rgb(0.7,0.7,0.7) });
-    const opts = [
-      ["Pour signature \u2014 merci de signer les deux exemplaires du contrat", true],
-      ["\u00c0 nous retourner sign\u00e9, un exemplaire nous \u00e9tant destin\u00e9", false],
-      ["Pour vos dossiers \u2014 aucune action requise", false],
-      ["\u00c0 compl\u00e9ter (informations manquantes, cf. art. 4)", false],
-      ["Selon accord \u2014 merci de confirmer votre accord par retour", false],
-    ];
-    let oy = H - 130;
-    opts.forEach(([label, checked]) => {
-      p.drawRectangle({ x: M, y: oy - 10, width: 12, height: 12, borderColor: black, borderWidth: 1, color: checked ? black : rgb(1,1,1) });
-      p.drawText(label, { x: M + 22, y: oy - 9, size: 10, font: checked ? bold : font, color: black });
-      oy -= 30;
-    });
-    p.drawText("Documents joints :", { x: M, y: oy - 18, size: 11, font: bold, color: black });
-    ["Contrat d'entreprise, en 2 exemplaires", "Conditions g\u00e9n\u00e9rales pour un contrat d'entreprise Legato SA, 1 exemplaire", "Devis de r\u00e9f\u00e9rence, en 2 exemplaires"]
-      .forEach((d, i) => p.drawText(`\u2013  ${d}`, { x: M, y: oy - 38 - i * 15, size: 10, font, color: black }));
-    p.drawText("Merci de nous retourner un exemplaire sign\u00e9 du contrat ainsi que la d\u00e9claration d'assurance compl\u00e9t\u00e9e (art. 4) dans les meilleurs d\u00e9lais.",
-      { x: M, y: oy - 100, size: 9, font, color: gray });
+  // ---- PAGE 2 : Fiche de contr\u00f4le des attestations (fusionn\u00e9e depuis assets) ----
+  try {
+    const fichePath = path.join(process.cwd(), "assets", "fiche_attestations.pdf");
+    const ficheBytes = fs.readFileSync(fichePath);
+    const fichePdf = await PDFDocument.load(ficheBytes);
+    const pages = await doc.copyPages(fichePdf, fichePdf.getPageIndices());
+    pages.forEach((pg) => doc.addPage(pg));
+  } catch (e) {
+    console.error("Fiche attestations non ins\u00e9r\u00e9e:", e.message);
   }
 
   // ---- PAGES CONTRAT (x2) ----
@@ -142,8 +152,16 @@ async function buildPdf(fields, devisBytes) {
     let y = H - 60;
     const nl = (need) => { if (y - need < 70) { p = doc.addPage([W, H]); y = H - 60; } };
 
+    // Logo officiel en haut \u00e0 droite, align\u00e9 avec le bloc titre, au-dessus du cadre ENTREPRENEUR
+    if (logo) {
+      const logoH = 64;
+      const logoW = logoH * (logo.width / logo.height);
+      p.drawImage(logo, { x: W - 20 - logoW, y: H - 36 - logoH, width: logoW, height: logoH });
+    }
+
     p.drawText("DOCUMENT CONTRACTUEL", { x: M, y, size: 8, font, color: gray }); y -= 22;
-    p.drawText("Contrat d'entreprise", { x: M, y, size: 18, font: bold, color: black }); y -= 16;
+    // Titre en VERT Legato officiel
+    p.drawText("Contrat d'entreprise", { x: M, y, size: 18, font: bold, color: VERT_LEGATO }); y -= 16;
     p.drawText(PROJET.nom, { x: M, y, size: 10, font, color: black }); y -= 12;
     p.drawText(PROJET.adresse, { x: M, y, size: 10, font, color: gray }); y -= 26;
 
@@ -249,7 +267,7 @@ export default async function handler(req, res) {
 
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const msg = await anthropic.messages.create({
-      model: "claude-sonnet-4-5",
+      model: "claude-sonnet-4-5-20250929",
       max_tokens: 1500,
       messages: [
         {
