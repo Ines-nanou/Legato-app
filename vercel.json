@@ -1,9 +1,16 @@
 {
   "version": 2,
-  "functions": {
-    "api/generer.js": {
-      "maxDuration": 60,
-      "includeFiles": "assets/**"
-    }
-  }
+  "builds": [
+    {
+      "src": "api/generer.js",
+      "use": "@vercel/node",
+      "config": { "includeFiles": "assets/**", "maxLambdaSize": "50mb" }
+    },
+    { "src": "public/**", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/api/generer", "dest": "/api/generer.js" },
+    { "src": "/", "dest": "/public/index.html" },
+    { "src": "/(.*)", "dest": "/public/$1" }
+  ]
 }
