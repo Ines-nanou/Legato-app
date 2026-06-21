@@ -1,0 +1,11 @@
+{
+  "rewrites": [
+    { "source": "/", "destination": "/index.html" }
+  ],
+  "functions": {
+    "api/generer.js": {
+      "maxDuration": 60,
+      "includeFiles": "assets/**"
+    }
+  }
+}
