@@ -114,11 +114,10 @@ function artTitle(page, B, titre, y) {
   return y - 14;
 }
 
-// Logo carre — 120pts de cote (comme sur la lettre physique)
-function drawLogo(page, logoImg, xRight, yTop) {
+// Logo — taille configurable selon la page
+function drawLogo(page, logoImg, xRight, yTop, side) {
   if (!logoImg) return;
-  const SIDE = 120;
-  const scale = Math.min(SIDE / logoImg.width, SIDE / logoImg.height);
+  const scale = Math.min(side / logoImg.width, side / logoImg.height);
   const lw = logoImg.width * scale;
   const lh = logoImg.height * scale;
   page.drawImage(logoImg, { x: xRight - lw, y: yTop - lh, width: lw, height: lh });
@@ -129,8 +128,8 @@ async function pageLettreGarde(pdfDoc, fonts, logoImg, infos, fd) {
   const { R, B } = fonts;
   const page = pdfDoc.addPage([PW, PH]);
 
-  // Logo Legato en haut a droite (meme hauteur que les coordonnees)
-  drawLogo(page, logoImg, MR, PH - 42);
+  // Logo Legato haut droite, 120pts (carre comme sur la lettre physique)
+  drawLogo(page, logoImg, MR, PH - 42, 120);
 
   let y = PH - 50;
 
@@ -176,8 +175,8 @@ async function pageContratRecto(pdfDoc, fonts, logoImg, infos, fd) {
   const { R, B } = fonts;
   const page = pdfDoc.addPage([PW, PH]);
 
-  // Logo en haut a droite
-  drawLogo(page, logoImg, MR, PH - 42);
+  // Logo haut droite, 70pts, AVANT le texte pour ne pas couper
+  drawLogo(page, logoImg, MR, PH - 30, 70);
 
   let y = PH - 48;
 
@@ -259,9 +258,7 @@ async function pageContratRecto(pdfDoc, fonts, logoImg, infos, fd) {
 async function pageContratVerso(pdfDoc, fonts, logoImg, infos, fd) {
   const { R, B } = fonts;
   const page = pdfDoc.addPage([PW, PH]);
-
-  // Logo en haut a droite
-  drawLogo(page, logoImg, MR, PH - 42);
+  // Pas de logo sur le verso
 
   let y = PH - 55;
 
