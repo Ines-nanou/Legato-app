@@ -207,7 +207,7 @@ async function pageLettreGarde(pdfDoc, fonts, logoImg, infos, fd) {
 }
 
 // ─── Recto contrat (articles 1 a 3.2 debut) ──────────────────────────────────
-async function pageContratRecto(pdfDoc, fonts, logoImg, infoDevis, lot, fd) {
+async function pageContratRecto(pdfDoc, fonts, logoImg, infoDevis, infos, lot, fd) {
   const { R, B } = fonts;
   const page = pdfDoc.addPage([PW, PH]);
 
@@ -391,10 +391,10 @@ module.exports = async (req, res) => {
       const infoDevis = infos.devis[i];
 
       // Exemplaire 1
-      await pageContratRecto(pdfDoc, fonts, logoImg, infoDevis, lot, fd);
+      await pageContratRecto(pdfDoc, fonts, logoImg, infoDevis, infos, lot, fd);
       await pageContratVerso(pdfDoc, fonts, infoDevis, infos, lot, fd);
       // Exemplaire 2
-      await pageContratRecto(pdfDoc, fonts, logoImg, infoDevis, lot, fd);
+      await pageContratRecto(pdfDoc, fonts, logoImg, infoDevis, infos, lot, fd);
       await pageContratVerso(pdfDoc, fonts, infoDevis, infos, lot, fd);
     }
 
