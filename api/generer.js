@@ -105,7 +105,12 @@ Inclure uniquement les lignes financieres reellement presentes. Ne jamais invent
       { type: 'text', text: nbLots === 2 ? promptDouble : promptUnique }
     ]}]
   });
-  return JSON.parse(resp.content[0].text.replace(/```json|```/g, '').trim());
+  const raw = resp.content[0].text;
+  // Extraire le JSON meme si Claude ajoute du texte avant ou apres
+  const start = raw.indexOf('{');
+  const end   = raw.lastIndexOf('}');
+  if (start === -1 || end === -1) throw new Error('Reponse IA invalide : JSON non trouve');
+  return JSON.parse(raw.slice(start, end + 1));
 }
 
 // ─── Helpers PDF ─────────────────────────────────────────────────────────────
