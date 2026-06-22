@@ -1,291 +1,461 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { PDFDocument, StandardFonts, rgb, cmyk } from "pdf-lib";
-import fs from "fs";
-import path from "path";
+// api/generer.js — Générateur de contrats prestataires Legato SA — v2
+// Champs manuels : nomChantier, adresseProjet, cfcNumero, cfcLibelle, nomEntreprise, formeJuridique
+// L'IA extrait uniquement : coordonnées secondaires, n° devis, date, récapitulatif financier
 
-export const config = {
-  api: { bodyParser: { sizeLimit: "30mb" } },
+const path = require('path');
+const fs = require('fs');
+const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
+
+// Désactiver le body parser Vercel — on gère le multipart nous-mêmes
+module.exports.config = {
+  api: {
+    bodyParser: false,
+    responseLimit: '50mb',
+  },
 };
 
-const PROJET = {
-  nom: "Construction de 2\u00d72 villas mitoyennes",
-  adresse: "Chemin de l'ORMET 68, Ecublens",
-  moNom: "Legato SA",
-  moAdresse: "Rue de la Plaine 46",
-  moNpaVille: "1400 Yverdon-les-Bains",
-  moTel: "024 426 77 00",
-  moEmail: "info@legato-eg.ch",
-};
+// ─── Couleurs ────────────────────────────────────────────────────────────────
+const GREEN  = rgb(0, 156 / 255, 116 / 255); // Vert Legato #009C74
+const BLACK  = rgb(0, 0, 0);
+const GRAY   = rgb(0.5, 0.5, 0.5);
+const DGRAY  = rgb(0.3, 0.3, 0.3);
+const WHITE  = rgb(1, 1, 1);
 
-const VERT_LEGATO = cmyk(0.78, 0, 0.67, 0);
+// ─── Dimensions A4 (en points) ───────────────────────────────────────────────
+const PW = 595.28;
+const PH = 841.89;
+const ML = 50;   // marge gauche
+const MR = 545;  // marge droite (PW - 50)
+const CW = MR - ML; // largeur du contenu = 495
 
-const PROMPT = `Tu analyses un devis PDF d'une entreprise sous-traitante adress\u00e9 \u00e0 Legato SA (ma\u00eetre d'ouvrage, entreprise g\u00e9n\u00e9rale de construction).
+// ─── Parser multipart avec busboy ────────────────────────────────────────────
+function parseForm(req) {
+  return new Promise((resolve, reject) => {
+    let Busboy;
+    try { Busboy = require('busboy'); } catch (e) { return reject(new Error('busboy non disponible')); }
 
-Extrais les informations et r\u00e9ponds UNIQUEMENT en JSON valide, sans aucun texte avant ou apr\u00e8s, sans balises markdown.
+    const busboy = Busboy({ headers: req.headers, limits: { fileSize: 50 * 1024 * 1024 } });
+    const fields = {};
+    const files  = {};
 
+    busboy.on('field', (name, value) => { fields[name] = value; });
+
+    busboy.on('file', (name, file) => {
+      const chunks = [];
+      file.on('data',  chunk => chunks.push(chunk));
+      file.on('end',   ()    => { files[name] = Buffer.concat(chunks); });
+      file.on('error', reject);
+    });
+
+    busboy.on('finish', () => resolve({ fields, files }));
+    busboy.on('error',  reject);
+    req.pipe(busboy);
+  });
+}
+
+// ─── Date en français ────────────────────────────────────────────────────────
+function dateFr(d = new Date()) {
+  const m = ['janvier','fevrier','mars','avril','mai','juin',
+             'juillet','aout','septembre','octobre','novembre','decembre'];
+  return `${d.getDate()} ${m[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+// ─── Appel Claude pour extraire les infos du devis ───────────────────────────
+async function extraireInfosDevis(devisBuffer) {
+  const Anthropic = require('@anthropic-ai/sdk');
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+  const b64 = devisBuffer.toString('base64');
+
+  const resp = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 1024,
+    messages: [{
+      role: 'user',
+      content: [
+        {
+          type: 'document',
+          source: { type: 'base64', media_type: 'application/pdf', data: b64 },
+        },
+        {
+          type: 'text',
+          text: `Tu es un assistant qui extrait des informations de devis de construction.
+Lis ce devis et retourne UNIQUEMENT un JSON valide (sans markdown, sans commentaires) avec ces champs :
 {
-  "entrepriseNom": "raison sociale compl\u00e8te de l'entreprise qui \u00e9met le devis",
-  "entrepriseAdresse": "rue et num\u00e9ro",
-  "entrepriseNpaVille": "NPA et ville",
-  "entrepriseTel": "t\u00e9l\u00e9phone",
-  "entrepriseTva": "num\u00e9ro de TVA (format CHE-xxx.xxx.xxx) si pr\u00e9sent, sinon vide",
-  "cfc": "code CFC \u00e0 3 chiffres (ex: 230). Si le devis \u00e9crit CFC23, interpr\u00e8te comme 230",
-  "cfcLibelle": "intitul\u00e9 clair du lot de travaux (ex: Travaux installations \u00e9lectriques)",
-  "devisNumero": "num\u00e9ro/r\u00e9f\u00e9rence du devis ou de l'offre",
-  "devisDate": "date du devis au format JJ.MM.AAAA",
-  "lignesRecap": [
-    {"libelle": "Montant total brut", "montant": nombre, "gras": true},
-    {"libelle": "Rabais X%", "montant": nombre n\u00e9gatif, "gras": false},
-    {"libelle": "Montant total net", "montant": nombre, "gras": true},
-    {"libelle": "TVA X.X%", "montant": nombre, "gras": false},
-    {"libelle": "Montant total net, TTC", "montant": nombre, "gras": true}
+  "adresseEntreprise": "rue et numero de l'entreprise auteur du devis",
+  "npVilleEntreprise": "NPA et ville de l'entreprise",
+  "telephoneEntreprise": "numero(s) de telephone de l'entreprise",
+  "noDevis": "numero de reference du devis",
+  "dateDevis": "date du devis au format JJ.MM.AAAA",
+  "lignesFinancieres": [
+    { "label": "Montant total brut", "montant": "XXX'XXX.XX", "bold": true },
+    { "label": "Rabais 3%", "montant": "- X'XXX.XX", "bold": false },
+    { "label": "Montant total net", "montant": "XXX'XXX.XX", "bold": true },
+    { "label": "TVA 8.10%", "montant": "X'XXX.XX", "bold": false },
+    { "label": "Montant total net, TTC", "montant": "XXX'XXX.XX", "bold": true }
   ]
 }
+Inclure uniquement les lignes financieres reellement presentes dans le devis.
+Ne jamais inventer des valeurs. Si une info est absente, mettre une chaine vide.`,
+        },
+      ],
+    }],
+  });
 
-R\u00e8gles :
-- Pour lignesRecap, reproduis EXACTEMENT la cascade financi\u00e8re du devis telle qu'elle appara\u00eet (brut, puis chaque rabais/escompte/arrondi r\u00e9ellement pr\u00e9sent dans l'ordre, puis net, puis TVA, puis TTC). N'invente aucun rabais absent. Adapte-toi \u00e0 la structure r\u00e9elle du devis.
-- Mets "gras": true sur les lignes de total (brut, net, TTC) et false sur les rabais/escomptes/TVA.
-- Ignore les positions/montants entre parenth\u00e8ses : ce sont des variantes/options NON comptabilis\u00e9es, \u00e0 exclure.
-- R\u00e9ponds uniquement avec l'objet JSON.`;
-
-function formatCHF(n) {
-  if (n === undefined || n === null || isNaN(Number(n))) return "\u2014";
-  const num = Number(n);
-  const fixed = Math.abs(num).toFixed(2);
-  const [i, d] = fixed.split(".");
-  const withSep = i.replace(/\B(?=(\d{3})+(?!\d))/g, "'");
-  return `${num < 0 ? "\u2013 " : ""}${withSep}.${d}`;
+  const txt   = resp.content[0].text;
+  const clean = txt.replace(/```json|```/g, '').trim();
+  return JSON.parse(clean);
 }
 
-function dateAujourdhui() {
-  const mois = ["janvier","f\u00e9vrier","mars","avril","mai","juin","juillet","ao\u00fbt","septembre","octobre","novembre","d\u00e9cembre"];
-  const d = new Date();
-  return `${d.getDate()} ${mois[d.getMonth()]} ${d.getFullYear()}`;
-}
-
-function wrap(text, size, maxW, font) {
-  const words = String(text).split(" ");
+// ─── Wrapping de texte (retourne un tableau de lignes) ───────────────────────
+function wrapText(font, text, size, maxWidth) {
+  const words = text.split(' ');
   const lines = [];
-  let cur = "";
+  let cur = '';
   for (const w of words) {
     const test = cur ? `${cur} ${w}` : w;
-    if (font.widthOfTextAtSize(test, size) > maxW) { lines.push(cur); cur = w; }
-    else cur = test;
+    if (font.widthOfTextAtSize(test, size) > maxWidth && cur) {
+      lines.push(cur);
+      cur = w;
+    } else {
+      cur = test;
+    }
   }
   if (cur) lines.push(cur);
   return lines;
 }
 
-async function chargerLogo(doc) {
-  try {
-    const logoPath = path.join(process.cwd(), "assets", "logo_legato.png");
-    const logoBytes = fs.readFileSync(logoPath);
-    return await doc.embedPng(logoBytes);
-  } catch (e) {
-    console.error("Logo non charg\u00e9:", e.message);
-    return null;
+// Dessine du texte avec retour à la ligne automatique, retourne le Y final
+function drawWrapped(page, font, text, x, y, size, color, maxWidth) {
+  const lines = wrapText(font, text, size, maxWidth);
+  const lh = size + 3;
+  for (const l of lines) {
+    page.drawText(l, { x, y, font, size, color });
+    y -= lh;
   }
+  return y;
 }
 
-async function buildPdf(fields, devisBytes) {
-  const doc = await PDFDocument.create();
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const logo = await chargerLogo(doc);
-  const W = 595.28, H = 841.89, M = 56;
-  const black = rgb(0.1, 0.1, 0.1), gray = rgb(0.42, 0.42, 0.42), light = rgb(0.95, 0.95, 0.95);
-  const today = dateAujourdhui();
+// ─── PAGE 1 : Lettre de garde ─────────────────────────────────────────────────
+async function pageLettreGarde(pdfDoc, fonts, logoImg, infos, fd) {
+  const { R, B } = fonts;
+  const page = pdfDoc.addPage([PW, PH]);
+  let y = PH - 50;
 
-  // ---- PAGE 1 : page de garde ----
-  {
-    const p = doc.addPage([W, H]);
-    if (logo) {
-      const logoW = 0.20 * W;
-      const logoH = logoW * (logo.height / logo.width);
-      p.drawImage(logo, { x: W - M - logoW, y: H - 24 - logoH, width: logoW, height: logoH });
-    }
-    p.drawText(PROJET.moNom, { x: M, y: H - 70, size: 11, font: bold, color: black });
-    p.drawText(PROJET.moAdresse, { x: M, y: H - 85, size: 9, font, color: gray });
-    p.drawText(PROJET.moNpaVille, { x: M, y: H - 97, size: 9, font, color: gray });
-    p.drawText(`${PROJET.moTel}  \u00b7  ${PROJET.moEmail}`, { x: M, y: H - 109, size: 9, font, color: gray });
-    const ay = H - 250;
-    [fields.entrepriseNom, fields.entrepriseAdresse, fields.entrepriseNpaVille].filter(Boolean).forEach((l, i) => {
-      p.drawText(String(l), { x: M + 250, y: ay - i * 16, size: 11, font: i === 0 ? bold : font, color: black });
+  // Logo Legato (haut droite)
+  if (logoImg) {
+    const s = logoImg.scale(0.15);
+    page.drawImage(logoImg, {
+      x: MR - s.width,
+      y: y - s.height + 12,
+      width:  s.width,
+      height: s.height,
     });
-    p.drawText(`Yverdon-les-Bains, le ${today}`, { x: M, y: H - 360, size: 10, font, color: black });
-    p.drawText("Concerne :", { x: M, y: H - 400, size: 10, font: bold, color: black });
-    p.drawText("Votre exemplaire du contrat d'entreprise", { x: M + 70, y: H - 400, size: 10, font, color: black });
-    p.drawText(`Projet : ${PROJET.nom} \u2014 ${PROJET.adresse}`, { x: M, y: H - 420, size: 9, font, color: gray });
-    if (fields.cfc || fields.cfcLibelle)
-      p.drawText(`CFC ${fields.cfc || ""}  ${fields.cfcLibelle || ""}`.trim(), { x: M, y: H - 433, size: 9, font, color: gray });
-    p.drawText("Madame, Monsieur,", { x: M, y: H - 470, size: 10, font, color: black });
-    const body = "Vous trouverez ci-joint votre contrat d'entreprise en deux exemplaires, les conditions g\u00e9n\u00e9rales de Legato SA ainsi que le devis correspondant. Les instructions relatives \u00e0 la suite \u00e0 donner figurent en page suivante.";
-    let y = H - 490;
-    wrap(body, 10, W - 2 * M, font).forEach((l) => { p.drawText(l, { x: M, y, size: 10, font, color: black }); y -= 14; });
-    p.drawText("Meilleures salutations,", { x: M, y: y - 26, size: 10, font, color: black });
-    p.drawText(PROJET.moNom, { x: M, y: y - 42, size: 10, font: bold, color: black });
   }
 
-  // ---- PAGE 2 : Fiche de contr\u00f4le des attestations ----
-  try {
-    const fichePath = path.join(process.cwd(), "assets", "fiche_attestations.pdf");
-    const ficheBytes = fs.readFileSync(fichePath);
-    const fichePdf = await PDFDocument.load(ficheBytes);
-    const pages = await doc.copyPages(fichePdf, fichePdf.getPageIndices());
-    pages.forEach((pg) => doc.addPage(pg));
-  } catch (e) {
-    console.error("Fiche attestations non ins\u00e9r\u00e9e:", e.message);
-  }
+  // Coordonnées Legato (haut gauche)
+  page.drawText('Legato SA', { x: ML, y, font: B, size: 10, color: BLACK });
+  y -= 13;
+  page.drawText('Rue de la Plaine 46', { x: ML, y, font: R, size: 9, color: BLACK });
+  y -= 12;
+  page.drawText('1400 Yverdon-les-Bains', { x: ML, y, font: R, size: 9, color: BLACK });
+  y -= 12;
+  page.drawText('024 426 77 00  .  info@legato-eg.ch', { x: ML, y, font: R, size: 9, color: BLACK });
 
-  // ---- PAGES CONTRAT (x2) ----
-  const drawContract = () => {
-    let p = doc.addPage([W, H]);
-    let y = H - 60;
-    const nl = (need) => { if (y - need < 70) { p = doc.addPage([W, H]); y = H - 60; } };
+  // Coordonnées entreprise (droite, milieu page)
+  const nomComplet = `${fd.nomEntreprise} ${fd.formeJuridique}`;
+  let ey = PH - 215;
+  const ex = 340;
+  page.drawText(nomComplet, { x: ex, y: ey, font: B, size: 10, color: BLACK }); ey -= 13;
+  if (infos.adresseEntreprise) { page.drawText(infos.adresseEntreprise,  { x: ex, y: ey, font: R, size: 9, color: BLACK }); ey -= 12; }
+  if (infos.npVilleEntreprise) { page.drawText(infos.npVilleEntreprise,  { x: ex, y: ey, font: R, size: 9, color: BLACK }); ey -= 12; }
 
-    if (logo) {
-      const logoH = 64;
-      const logoW = logoH * (logo.width / logo.height);
-      p.drawImage(logo, { x: W - 20 - logoW, y: H - 36 - logoH, width: logoW, height: logoH });
-    }
+  // Date
+  y = PH - 330;
+  page.drawText(`Yverdon-les-Bains, le ${dateFr()}`, { x: ML, y, font: R, size: 9, color: BLACK });
 
-    p.drawText("DOCUMENT CONTRACTUEL", { x: M, y, size: 8, font, color: gray }); y -= 22;
-    p.drawText("Contrat d'entreprise", { x: M, y, size: 18, font: bold, color: VERT_LEGATO }); y -= 16;
-    p.drawText(PROJET.nom, { x: M, y, size: 10, font, color: black }); y -= 12;
-    p.drawText(PROJET.adresse, { x: M, y, size: 10, font, color: gray }); y -= 26;
+  // Objet
+  y -= 32;
+  page.drawText('Concerne :', { x: ML, y, font: B, size: 9, color: BLACK });
+  page.drawText("Votre exemplaire du contrat d'entreprise", { x: ML + 68, y, font: R, size: 9, color: BLACK });
 
-    const cw = (W - 2 * M - 16) / 2;
-    p.drawRectangle({ x: M, y: y - 76, width: cw, height: 76, borderColor: rgb(0.8,0.8,0.8), borderWidth: 0.75 });
-    p.drawRectangle({ x: M + cw + 16, y: y - 76, width: cw, height: 76, borderColor: rgb(0.8,0.8,0.8), borderWidth: 0.75 });
-    p.drawText("MA\u00ceTRE D'OUVRAGE", { x: M + 8, y: y - 14, size: 8, font: bold, color: gray });
-    p.drawText(PROJET.moNom, { x: M + 8, y: y - 28, size: 10, font: bold, color: black });
-    p.drawText(PROJET.moAdresse, { x: M + 8, y: y - 41, size: 9, font, color: black });
-    p.drawText(PROJET.moNpaVille, { x: M + 8, y: y - 53, size: 9, font, color: black });
-    p.drawText(PROJET.moTel, { x: M + 8, y: y - 65, size: 9, font, color: black });
-    const c2 = M + cw + 24;
-    p.drawText("ENTREPRENEUR", { x: c2, y: y - 14, size: 8, font: bold, color: gray });
-    p.drawText(String(fields.entrepriseNom || ""), { x: c2, y: y - 28, size: 10, font: bold, color: black });
-    p.drawText(String(fields.entrepriseAdresse || ""), { x: c2, y: y - 41, size: 9, font, color: black });
-    p.drawText(String(fields.entrepriseNpaVille || ""), { x: c2, y: y - 53, size: 9, font, color: black });
-    let entLine = String(fields.entrepriseTel || "");
-    if (fields.entrepriseTva) entLine += `  \u00b7  ${fields.entrepriseTva}`;
-    p.drawText(entLine, { x: c2, y: y - 65, size: 8, font, color: black });
-    y -= 98;
+  y -= 17;
+  page.drawText(`Projet : ${fd.nomChantier} -- ${fd.adresseProjet}`, { x: ML, y, font: R, size: 9, color: DGRAY });
+  y -= 13;
+  page.drawText(`CFC ${fd.cfcNumero}  ${fd.cfcLibelle}`, { x: ML, y, font: R, size: 9, color: DGRAY });
 
-    p.drawRectangle({ x: M, y: y - 28, width: W - 2 * M, height: 28, color: light });
-    p.drawText(`CFC ${fields.cfc || ""}   ${fields.cfcLibelle || ""}`, { x: M + 8, y: y - 12, size: 9, font: bold, color: black });
-    p.drawText(`Selon devis ${fields.devisNumero || ""} du ${fields.devisDate || ""}  \u00b7  art. 15 al. 3 et 4, norme SIA 118`, { x: M + 8, y: y - 24, size: 8, font, color: gray });
-    y -= 44;
+  // Corps lettre
+  y -= 28;
+  page.drawText('Madame, Monsieur,', { x: ML, y, font: R, size: 9, color: BLACK });
+  y -= 17;
+  y = drawWrapped(page, R,
+    "Vous trouverez ci-joint votre contrat d'entreprise en deux exemplaires, les conditions generales de Legato SA ainsi que le devis correspondant. Les instructions relatives a la suite a donner figurent en page suivante.",
+    ML, y, 9, BLACK, CW);
+  y -= 30;
+  page.drawText('Meilleures salutations,', { x: ML, y, font: R, size: 9, color: BLACK });
+  y -= 15;
+  page.drawText('Legato SA', { x: ML, y, font: B, size: 9, color: BLACK });
+}
 
-    p.drawText("R\u00c9CAPITULATIF FINANCIER", { x: M, y, size: 9, font: bold, color: black }); y -= 16;
-    (fields.lignesRecap || []).forEach((l) => {
-      const b = !!l.gras;
-      p.drawText(String(l.libelle || ""), { x: M, y, size: 9, font: b ? bold : font, color: black });
-      p.drawText("CHF", { x: W - M - 140, y, size: 9, font, color: gray });
-      p.drawText(formatCHF(l.montant), { x: W - M - 95, y, size: 9, font: b ? bold : font, color: black });
-      y -= 15;
-    });
+// ─── PAGE 3 ou 5 : Page 1 du contrat (articles 1 a 5.1) ──────────────────────
+async function pageContratRecto(pdfDoc, fonts, infos, fd) {
+  const { R, B } = fonts;
+  const page = pdfDoc.addPage([PW, PH]);
+  let y = PH - 48;
+
+  // En-tete
+  page.drawText('DOCUMENT CONTRACTUEL', { x: ML, y, font: R, size: 7.5, color: GRAY });
+  y -= 20;
+  page.drawText("Contrat d'entreprise", { x: ML, y, font: B, size: 23, color: GREEN });
+  y -= 20;
+  page.drawText(fd.nomChantier, { x: ML, y, font: R, size: 10, color: GRAY });
+  y -= 13;
+  page.drawText(fd.adresseProjet, { x: ML, y, font: R, size: 10, color: GRAY });
+  y -= 20;
+
+  // Boites MO / Entrepreneur
+  const bY  = y;
+  const bH  = 62;
+  const bWL = 242;
+  const bWR = 235;
+  const bXL = ML;
+  const bXR = ML + bWL + 14;
+
+  page.drawRectangle({ x: bXL, y: bY - bH, width: bWL, height: bH, borderColor: GRAY, borderWidth: 0.5, color: WHITE });
+  page.drawRectangle({ x: bXR, y: bY - bH, width: bWR, height: bH, borderColor: GRAY, borderWidth: 0.5, color: WHITE });
+
+  // MO
+  let by = bY - 9;
+  page.drawText('MAITRE D\'OUVRAGE', { x: bXL + 7, y: by, font: R, size: 7, color: GRAY }); by -= 13;
+  page.drawText('Legato SA',           { x: bXL + 7, y: by, font: B, size: 9, color: BLACK }); by -= 11;
+  page.drawText('Rue de la Plaine 46', { x: bXL + 7, y: by, font: R, size: 8.5, color: BLACK }); by -= 10;
+  page.drawText('1400 Yverdon-les-Bains', { x: bXL + 7, y: by, font: R, size: 8.5, color: BLACK }); by -= 10;
+  page.drawText('024 426 77 00',        { x: bXL + 7, y: by, font: R, size: 8.5, color: BLACK });
+
+  // Entrepreneur
+  const nomComplet = `${fd.nomEntreprise} ${fd.formeJuridique}`;
+  by = bY - 9;
+  page.drawText('ENTREPRENEUR', { x: bXR + 7, y: by, font: R, size: 7, color: GRAY }); by -= 13;
+  page.drawText(nomComplet,     { x: bXR + 7, y: by, font: B, size: 9, color: BLACK }); by -= 11;
+  if (infos.adresseEntreprise)  { page.drawText(infos.adresseEntreprise,  { x: bXR + 7, y: by, font: R, size: 8.5, color: BLACK }); by -= 10; }
+  if (infos.npVilleEntreprise)  { page.drawText(infos.npVilleEntreprise,  { x: bXR + 7, y: by, font: R, size: 8.5, color: BLACK }); by -= 10; }
+  if (infos.telephoneEntreprise){ page.drawText(infos.telephoneEntreprise, { x: bXR + 7, y: by, font: R, size: 8.5, color: BLACK }); }
+
+  y = bY - bH - 14;
+
+  // CFC et devis
+  page.drawText(`CFC ${fd.cfcNumero}  ${fd.cfcLibelle}`, { x: ML, y, font: B, size: 9, color: BLACK }); y -= 12;
+  page.drawText(`Selon devis ${infos.noDevis || '...'} du ${infos.dateDevis || '...'}  .  art. 15 al. 3 et 4, norme SIA 118`,
+    { x: ML, y, font: R, size: 8.5, color: GRAY }); y -= 17;
+
+  // Recapitulatif financier
+  page.drawText('RECAPITULATIF FINANCIER', { x: ML, y, font: B, size: 9, color: BLACK }); y -= 13;
+
+  const lignes = infos.lignesFinancieres || [];
+  for (const lg of lignes) {
+    const f = lg.bold ? B : R;
+    page.drawText(lg.label, { x: ML, y, font: f, size: 9, color: BLACK });
+    const mTxt = `CHF    ${lg.montant}`;
+    const mW   = f.widthOfTextAtSize(mTxt, 9);
+    page.drawText(mTxt, { x: MR - mW, y, font: f, size: 9, color: BLACK });
     y -= 12;
-
-    const arts = [
-      ["Article 1 : Objet du contrat", ["Le Ma\u00eetre d\u2019ouvrage est une entreprise g\u00e9n\u00e9rale construisant des villas ou autres b\u00e2timents cl\u00e9s en main. Il entend confier \u00e0 l\u2019entrepreneur les travaux pr\u00e9cit\u00e9s."]],
-      ["Article 2 : Prix", ["Les plus-et/ou moins-values seront pr\u00e9cis\u00e9es de cas en cas par commande \u00e9crite du Ma\u00eetre d\u2019ouvrage.", "Le Ma\u00eetre d\u2019ouvrage pourra refuser le paiement de tous travaux qu\u2019il n\u2019aurait pas express\u00e9ment command\u00e9s ou dont le prix n\u2019aurait pas \u00e9t\u00e9 express\u00e9ment accept\u00e9 par lui avant leur ex\u00e9cution."]],
-      ["Article 3.1 : D\u00e9lais", ["Avant le d\u00e9but de la construction, le Ma\u00eetre d\u2019ouvrage remet \u00e0 l\u2019entrepreneur un planning indiquant la p\u00e9riode pendant laquelle il doit r\u00e9aliser les travaux qui lui incombent et un d\u00e9lai d\u2019ex\u00e9cution.", "L\u2019entrepreneur s\u2019engage \u00e0 r\u00e9aliser les travaux pendant cette p\u00e9riode et d\u00e9lai indiqu\u00e9. Il ne peut en aucun cas invoquer un manque ou l\u2019absence (pour quelque motif que ce soit) de personnel pour retarder l\u2019ex\u00e9cution des travaux. En revanche, la soci\u00e9t\u00e9 Legato SA s\u2019engage \u00e0 faire les choix et d\u00e9tails dans des d\u00e9lais acceptables.", "L\u2019entrepreneur s\u2019engage \u00e0 suivre les ordres et les instructions donn\u00e9s par le Ma\u00eetre d\u2019ouvrage qui est seul habilit\u00e9 \u00e0 planifier et \u00e0 coordonner la construction de l\u2019ouvrage entre les divers ma\u00eetres d\u2019\u00e9tat. L\u2019entrepreneur a l\u2019obligation d\u2019assister aux r\u00e9unions de chantier pr\u00e9vues, sur convocation du Ma\u00eetre d\u2019ouvrage.", "Pour le surplus, l\u2019art. 92 de la norme SIA 118 est applicable."]],
-      ["Article 3.2 : P\u00e9nalit\u00e9s", ["Le planning d\u00e9taill\u00e9 transmis par la Direction des Travaux est r\u00e9put\u00e9 accept\u00e9 en l'absence de r\u00e9serve \u00e9crite dans un d\u00e9lai de 5 jours ouvrables.", "Tout retard constat\u00e9 par rapport au planning fera l'objet d'un courrier de constat adress\u00e9 \u00e0 l'entreprise.", "L\u2019entreprise devra mettre les moyens pour rattraper ce retard dans un d\u00e9lai de 3 jours ouvrables.", "\u00c0 d\u00e9faut de r\u00e9tablissement de la situation dans le d\u00e9lai imparti, une mise en demeure sera notifi\u00e9e.", "Apr\u00e8s mise en demeure rest\u00e9e sans effet, une p\u00e9nalit\u00e9 de CHF 500.- par jour calendaire de retard pourra \u00eatre appliqu\u00e9e, plafonn\u00e9e \u00e0 10 % du montant du march\u00e9.", "Tous les frais induits par le retard (coordination suppl\u00e9mentaire, immobilisation d'autres entreprises, locations, moyens provisoires, d\u00e9placements suppl\u00e9mentaires de la Direction des Travaux, etc.) seront factur\u00e9s \u00e0 l'entreprise responsable.", "En cas de retard mettant en p\u00e9ril le planning g\u00e9n\u00e9ral du chantier, la Direction des Travaux pourra exiger un renforcement imm\u00e9diat des effectifs.", "Si le retard persiste malgr\u00e9 les mesures pr\u00e9cit\u00e9es, le Ma\u00eetre d'Ouvrage se r\u00e9serve le droit de faire ex\u00e9cuter tout ou partie des prestations par une entreprise tierce aux frais et risques de l'entreprise d\u00e9faillante."]],
-      ["Article 4 : Assurance de l\u2019entreprise selon art. 26 al. 1 de la norme SIA 118", ["L\u2019entrepreneur d\u00e9clare \u00eatre couvert pour les dommages caus\u00e9s aux personnes ou aux biens par une assurance responsabilit\u00e9 civile \u00e0 l\u2019\u00e9gard des tiers.", "Compagnie et n\u00b0 : \u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026..", "Prestation maximale par dommage : \u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026.."]],
-      ["Article 5 : Conditions", ["5.1 Conditions de paiement (selon normes SIA 118 art. 144)", "90% sur situations suivant l\u2019avance des travaux.", "10% \u00e0 la fin des travaux (r\u00e9ceptionn\u00e9s par le Ma\u00eetre d\u2019ouvrage), contre remise par l\u2019entrepreneur d\u2019une garantie bancaire ou d\u2019assurance et apr\u00e8s le versement du solde du contrat d\u2019entreprise g\u00e9n\u00e9rale par le ma\u00eetre d\u2019ouvrage.", "5.2 Conditions g\u00e9n\u00e9rales", "Les CONDITIONS G\u00c9N\u00c9RALES POUR UN CONTRAT D\u2019ENTREPRISE de Legato SA font partie int\u00e9grante du pr\u00e9sent contrat.", "En cas de contradiction entre divers documents du contrat, l\u2019ordre de priorit\u00e9 s\u2019\u00e9tablit selon l\u2019art. 21 al. 1 de la norme SIA 118, dans le cas d\u2019une contre-offre selon l\u2019art. 22 al. 4."]],
-      ["Article 6 : Garanties", ["Les garanties donn\u00e9es par l\u2019entrepreneur sur les travaux effectu\u00e9s contre les d\u00e9fauts apparents et cach\u00e9s sont conformes \u00e0 celles pr\u00e9vues par la norme SIA 118, sans restriction.", "Le Ma\u00eetre d\u2019ouvrage est en droit de r\u00e9clamer \u00e0 l\u2019entrepreneur le remboursement int\u00e9gral de toute indemnit\u00e9 que le Ma\u00eetre d\u2019ouvrage devrait verser au propri\u00e9taire (ma\u00eetre de l\u2019ouvrage du contrat d\u2019entreprise g\u00e9n\u00e9rale liant Legato SA) \u00e0 la suite d\u2019une faute ou d\u2019une n\u00e9gligence commise par l\u2019entrepreneur dans l\u2019ex\u00e9cution des travaux qui lui incombent."]],
-      ["Article 7 : For selon art. 37 de la norme SIA 118", ["Les parties conviennent qu\u2019en cas de contestation, le for sera au lieu de situation de l\u2019ouvrage.", "Le pr\u00e9sent contrat, \u00e9tabli en 2 exemplaires engage, r\u00e9ciproquement par leur signature, l\u2019entrepreneur (le fournisseur) et le Ma\u00eetre d\u2019ouvrage."]],
-    ];
-
-
-    for (const [title, paras] of arts) {
-      nl(40);
-      p.drawText(title, { x: M, y, size: 9.5, font: bold, color: black }); y -= 14;
-      for (const para of paras) {
-        for (const l of wrap(para, 8.5, W - 2 * M - 10, font)) { nl(12); p.drawText(l, { x: M + 10, y, size: 8.5, font, color: black }); y -= 11; }
-        y -= 3;
-      }
-      y -= 6;
-    }
-    nl(90); y -= 10;
-    p.drawText(`Lieu et date :  Yverdon-les-Bains, le ${today}`, { x: M, y, size: 9, font, color: black }); y -= 40;
-    p.drawText("LE MA\u00ceTRE D'OUVRAGE", { x: M, y, size: 8, font: bold, color: gray });
-    p.drawText("L'ENTREPRENEUR", { x: M + cw + 24, y, size: 8, font: bold, color: gray }); y -= 13;
-    p.drawText(PROJET.moNom, { x: M, y, size: 9, font, color: black });
-    p.drawText(String(fields.entrepriseNom || ""), { x: M + cw + 24, y, size: 9, font, color: black }); y -= 13;
-    p.drawText("Signature : \u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026", { x: M, y, size: 9, font, color: gray });
-    p.drawText("Signature : \u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026", { x: M + cw + 24, y, size: 9, font, color: gray });
-  };
-  drawContract();
-  drawContract();
-
-  // ---- Fusion : CG (1x) ----
-  try {
-    const cgPath = path.join(process.cwd(), "assets", "conditions_generales.pdf");
-    const cgBytes = fs.readFileSync(cgPath);
-    const cgPdf = await PDFDocument.load(cgBytes);
-    const pages = await doc.copyPages(cgPdf, cgPdf.getPageIndices());
-    pages.forEach((pg) => doc.addPage(pg));
-  } catch (e) {
-    console.error("CG non ins\u00e9r\u00e9es:", e.message);
   }
+  y -= 8;
 
-  // ---- Fusion : devis original (2x) ----
-  try {
-    const devisPdf = await PDFDocument.load(devisBytes);
-    for (let c = 0; c < 2; c++) {
-      const pages = await doc.copyPages(devisPdf, devisPdf.getPageIndices());
-      pages.forEach((pg) => doc.addPage(pg));
-    }
-  } catch (e) {
-    console.error("Devis non fusionn\u00e9:", e.message);
-  }
+  // Ligne separatrice
+  page.drawLine({ start: { x: ML, y }, end: { x: MR, y }, thickness: 0.3, color: GRAY });
+  y -= 14;
 
-  return await doc.save();
+  // ARTICLE 1 ─────────────────────────────────────────────────────────────────
+  page.drawText('1  OBJET DU CONTRAT', { x: ML, y, font: B, size: 9.5, color: BLACK }); y -= 13;
+  y = drawWrapped(page, R,
+    "Le Maitre d'ouvrage est une entreprise generale construisant des villas ou autres batiments cles en main. Il entend confier a l'entrepreneur les travaux precites.",
+    ML + 8, y, 9, BLACK, CW - 8); y -= 7;
+
+  // ARTICLE 2 ─────────────────────────────────────────────────────────────────
+  page.drawText('2  PRIX', { x: ML, y, font: B, size: 9.5, color: BLACK }); y -= 13;
+  y = drawWrapped(page, R,
+    "Les plus et/ou moins-values seront precisees de cas en cas par commande ecrite du Maitre d'ouvrage.",
+    ML + 8, y, 9, BLACK, CW - 8); y -= 5;
+  y = drawWrapped(page, R,
+    "Le Maitre d'ouvrage pourra refuser le paiement de tous travaux qu'il n'aurait pas expressement commandes ou dont le prix n'aurait pas ete expressement accepte par lui avant leur execution.",
+    ML + 8, y, 9, BLACK, CW - 8); y -= 7;
+
+  // ARTICLE 3 ─────────────────────────────────────────────────────────────────
+  page.drawText('3  DELAIS', { x: ML, y, font: B, size: 9.5, color: BLACK }); y -= 13;
+  y = drawWrapped(page, R,
+    "Avant le debut de la construction, le Maitre d'ouvrage remet a l'entrepreneur un planning indiquant la periode pendant laquelle il doit realiser les travaux qui lui incombent et un delai d'execution.",
+    ML + 8, y, 9, BLACK, CW - 8); y -= 5;
+  y = drawWrapped(page, R,
+    "L'entrepreneur s'engage a realiser les travaux pendant cette periode et ce delai. Il ne peut en aucun cas invoquer un manque ou l'absence de personnel pour retarder l'execution des travaux. En revanche, Legato SA s'engage a faire les choix et details dans des delais acceptables.",
+    ML + 8, y, 9, BLACK, CW - 8); y -= 5;
+  y = drawWrapped(page, R,
+    "L'entrepreneur s'engage a suivre les ordres et instructions du Maitre d'ouvrage, seul habilite a planifier et coordonner la construction de l'ouvrage. Il a l'obligation d'assister aux reunions de chantier, sur convocation du Maitre d'ouvrage.",
+    ML + 8, y, 9, BLACK, CW - 8); y -= 5;
+  y = drawWrapped(page, R,
+    "Pour le surplus, l'art. 92 de la norme SIA 118 est applicable.",
+    ML + 8, y, 9, BLACK, CW - 8); y -= 7;
+
+  // ARTICLE 4 ─────────────────────────────────────────────────────────────────
+  page.drawText("4  ASSURANCE DE L'ENTREPRISE -- ART. 26 AL. 1 SIA 118", { x: ML, y, font: B, size: 9.5, color: BLACK }); y -= 13;
+  y = drawWrapped(page, R,
+    "L'entrepreneur declare etre couvert pour les dommages causes aux personnes ou aux biens par une assurance responsabilite civile a l'egard des tiers.",
+    ML + 8, y, 9, BLACK, CW - 8); y -= 5;
+  page.drawText('Compagnie et n\u00b0 : ......................................................', { x: ML + 8, y, font: R, size: 9, color: BLACK }); y -= 12;
+  page.drawText('Prestation max. par dommage : ..................................', { x: ML + 8, y, font: R, size: 9, color: BLACK }); y -= 17;
+
+  // ARTICLE 5 (debut) ─────────────────────────────────────────────────────────
+  page.drawText('5  CONDITIONS', { x: ML, y, font: B, size: 9.5, color: BLACK }); y -= 13;
+  y = drawWrapped(page, R,
+    "5.1 Conditions de paiement -- art. 144 SIA 118 : 90% sur situations suivant l'avancement des travaux ; 10% a la fin des travaux (receptionnes par le Maitre d'ouvrage), contre remise d'une garantie bancaire ou d'assurance, et apres versement du solde du contrat d'entreprise generale.",
+    ML + 8, y, 9, BLACK, CW - 8); y -= 5;
+
+  // Debut 5.2 (coupure de page comme dans le modele)
+  y = drawWrapped(page, R,
+    "5.2 Les Conditions generales pour un contrat d'entreprise de Legato SA font partie integrante du present contrat. En cas de",
+    ML + 8, y, 9, BLACK, CW - 8);
 }
 
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    res.status(405).json({ error: "M\u00e9thode non autoris\u00e9e" });
+// ─── PAGE 4 ou 6 : Page 2 du contrat (suite 5.2, articles 6 et 7, signatures) ─
+async function pageContratVerso(pdfDoc, fonts, infos, fd) {
+  const { R, B } = fonts;
+  const page = pdfDoc.addPage([PW, PH]);
+  let y = PH - 55;
+
+  // Suite article 5.2
+  y = drawWrapped(page, R,
+    "contradiction, l'ordre de priorite s'etablit selon l'art. 21 al. 1 SIA 118 ; dans le cas d'une contre-offre, selon l'art. 22 al. 4.",
+    ML + 8, y, 9, BLACK, CW - 8); y -= 7;
+
+  // ARTICLE 6 ─────────────────────────────────────────────────────────────────
+  page.drawText('6  GARANTIES', { x: ML, y, font: B, size: 9.5, color: BLACK }); y -= 13;
+  y = drawWrapped(page, R,
+    "Les garanties donnees par l'entrepreneur sur les travaux effectues contre les defauts apparents et caches sont conformes a celles prevues par la norme SIA 118, sans restriction.",
+    ML + 8, y, 9, BLACK, CW - 8); y -= 5;
+  y = drawWrapped(page, R,
+    "Le Maitre d'ouvrage est en droit de reclamer a l'entrepreneur le remboursement integral de toute indemnite qu'il devrait verser au proprietaire a la suite d'une faute ou negligence commise par l'entrepreneur.",
+    ML + 8, y, 9, BLACK, CW - 8); y -= 7;
+
+  // ARTICLE 7 ─────────────────────────────────────────────────────────────────
+  page.drawText('7  FOR -- ART. 37 SIA 118', { x: ML, y, font: B, size: 9.5, color: BLACK }); y -= 13;
+  y = drawWrapped(page, R,
+    "Les parties conviennent qu'en cas de contestation, le for sera au lieu de situation de l'ouvrage. Le present contrat, etabli en deux exemplaires, engage reciproquement, par leur signature, l'entrepreneur et le Maitre d'ouvrage.",
+    ML + 8, y, 9, BLACK, CW - 8); y -= 25;
+
+  // Date et lieu
+  page.drawText(`Lieu et date : Yverdon-les-Bains, le ${dateFr()}`, { x: ML, y, font: R, size: 9, color: BLACK }); y -= 35;
+
+  // Signatures
+  const nomComplet = `${fd.nomEntreprise} ${fd.formeJuridique}`;
+  const sxR = MR - 200;
+  page.drawText('LE MAITRE D\'OUVRAGE', { x: ML,  y, font: B, size: 8.5, color: BLACK });
+  page.drawText('L\'ENTREPRENEUR',       { x: sxR, y, font: B, size: 8.5, color: BLACK }); y -= 13;
+  page.drawText('Legato SA',             { x: ML,  y, font: R, size: 9, color: BLACK });
+  page.drawText(nomComplet,              { x: sxR, y, font: R, size: 9, color: BLACK }); y -= 32;
+  page.drawText('Signature : ................................', { x: ML,  y, font: R, size: 9, color: BLACK });
+  page.drawText('Signature : ................................', { x: sxR, y, font: R, size: 9, color: BLACK });
+}
+
+// ─── HANDLER PRINCIPAL ───────────────────────────────────────────────────────
+module.exports = async (req, res) => {
+  if (req.method !== 'POST') {
+    res.status(405).send('Methode non autorisee');
     return;
   }
+
   try {
-    const { devisBase64 } = req.body || {};
-    if (!devisBase64) {
-      res.status(400).json({ error: "Aucun devis fourni." });
+    // 1. Parser le formulaire multipart
+    const { fields, files } = await parseForm(req);
+
+    // 2. Valider les champs obligatoires
+    const reqFields = ['nomChantier','adresseProjet','cfcNumero','cfcLibelle','nomEntreprise','formeJuridique'];
+    for (const f of reqFields) {
+      if (!fields[f] || !fields[f].toString().trim()) {
+        res.status(400).json({ error: `Champ manquant : ${f}` });
+        return;
+      }
+    }
+
+    const fd = {
+      nomChantier:   fields.nomChantier.toString().trim(),
+      adresseProjet: fields.adresseProjet.toString().trim(),
+      cfcNumero:     fields.cfcNumero.toString().trim(),
+      cfcLibelle:    fields.cfcLibelle.toString().trim(),
+      nomEntreprise: fields.nomEntreprise.toString().trim(),
+      formeJuridique:fields.formeJuridique.toString().trim(),
+    };
+
+    const devisBuffer = files.devis;
+    if (!devisBuffer || devisBuffer.length === 0) {
+      res.status(400).json({ error: 'Devis PDF manquant' });
       return;
     }
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const msg = await anthropic.messages.create({
-      model: "claude-sonnet-4-5-20250929",
-      max_tokens: 1500,
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "document", source: { type: "base64", media_type: "application/pdf", data: devisBase64 } },
-            { type: "text", text: PROMPT },
-          ],
-        },
-      ],
-    });
-    const text = (msg.content || []).map((b) => b.text || "").join("\n");
-    const clean = text.replace(/```json/gi, "").replace(/```/g, "").trim();
-    let fields;
-    try { fields = JSON.parse(clean); }
-    catch (e) {
-      const a = clean.indexOf("{"), b = clean.lastIndexOf("}");
-      if (a !== -1 && b > a) fields = JSON.parse(clean.slice(a, b + 1));
-      else throw new Error("L'IA n'a pas renvoy\u00e9 un JSON exploitable.");
+
+    // 3. Extraire les infos du devis via Claude
+    const infos = await extraireInfosDevis(devisBuffer);
+
+    // 4. Lire les assets
+    const assetsDir = path.join(__dirname, '..', 'assets');
+    const logoPath  = path.join(assetsDir, 'logo_legato.png');
+    const fichePath = path.join(assetsDir, 'fiche_attestations.pdf');
+    const cgPath    = path.join(assetsDir, 'conditions_generales.pdf');
+
+    const ficheBytes = fs.readFileSync(fichePath);
+    const cgBytes    = fs.readFileSync(cgPath);
+    const logoBytes  = fs.existsSync(logoPath) ? fs.readFileSync(logoPath) : null;
+
+    // 5. Creer le document PDF
+    const pdfDoc = await PDFDocument.create();
+    const B = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const R = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const fonts = { B, R };
+
+    let logoImg = null;
+    if (logoBytes) {
+      try { logoImg = await pdfDoc.embedPng(logoBytes); } catch (_) { logoImg = null; }
     }
-    const devisBytes = Buffer.from(devisBase64, "base64");
-    const pdfBytes = await buildPdf(fields, devisBytes);
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="Contrat_${String(fields.entrepriseNom || "entreprise").replace(/[^a-zA-Z0-9]/g, "_")}.pdf"`);
+
+    // PAGE 1 : Lettre de garde
+    await pageLettreGarde(pdfDoc, fonts, logoImg, infos, fd);
+
+    // PAGE 2 : Fiche attestations (asset PDF)
+    const fichePdf  = await PDFDocument.load(ficheBytes);
+    const fichePages = await pdfDoc.copyPages(fichePdf, fichePdf.getPageIndices());
+    fichePages.forEach(p => pdfDoc.addPage(p));
+
+    // PAGES 3-4 : Contrat exemplaire 1
+    await pageContratRecto(pdfDoc, fonts, infos, fd);
+    await pageContratVerso(pdfDoc, fonts, infos, fd);
+
+    // PAGES 5-6 : Contrat exemplaire 2
+    await pageContratRecto(pdfDoc, fonts, infos, fd);
+    await pageContratVerso(pdfDoc, fonts, infos, fd);
+
+    // PAGES 7-18 : Conditions generales (asset PDF)
+    const cgPdf   = await PDFDocument.load(cgBytes);
+    const cgPages = await pdfDoc.copyPages(cgPdf, cgPdf.getPageIndices());
+    cgPages.forEach(p => pdfDoc.addPage(p));
+
+    // PAGES 19+ : Devis x2
+    const devisPdf = await PDFDocument.load(devisBuffer);
+    const devisIdx = devisPdf.getPageIndices();
+
+    const dv1 = await pdfDoc.copyPages(devisPdf, devisIdx);
+    dv1.forEach(p => pdfDoc.addPage(p));
+
+    const dv2 = await pdfDoc.copyPages(devisPdf, devisIdx);
+    dv2.forEach(p => pdfDoc.addPage(p));
+
+    // 6. Serialiser
+    const pdfBytes = await pdfDoc.save();
+
+    const nomFichier = `Contrat_${fd.nomEntreprise.replace(/\s+/g, '_')}_CFC${fd.cfcNumero}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${nomFichier}"`);
     res.status(200).send(Buffer.from(pdfBytes));
+
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message || "Erreur serveur" });
+    console.error('ERREUR generer.js:', err);
+    res.status(500).json({ error: 'Erreur lors de la generation', detail: err.message });
   }
-}
+};
