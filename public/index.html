@@ -171,6 +171,17 @@
     <div class="file-chosen" id="fileChosen"></div>
   </div>
 
+  <div class="section-label" style="margin-top:20px;">Annexe (optionnel)</div>
+  <p style="font-size:12px; color:#888; margin-bottom:10px;">Ce document sera inséré après chaque exemplaire du contrat.</p>
+
+  <div class="drop-zone" id="annexeZone">
+    <input type="file" id="annexeFile" accept=".pdf" />
+    <div class="drop-icon">📎</div>
+    <div class="drop-text"><strong>Cliquer pour choisir</strong> ou deposer ici</div>
+    <div class="drop-hint">PDF optionnel</div>
+    <div class="file-chosen" id="annexeChosen"></div>
+  </div>
+
   <div class="msg msg-error"   id="msgError"></div>
   <div class="msg msg-success" id="msgSuccess">
     ✅ Contrat(s) genere(s) ! Votre telechargement demarre automatiquement.
@@ -205,7 +216,7 @@
     }
   }
 
-  // Drag & drop
+  // Drag & drop — Devis
   const dropZone   = document.getElementById('dropZone');
   const fileInput  = document.getElementById('devisFile');
   const fileChosen = document.getElementById('fileChosen');
@@ -222,6 +233,26 @@
     if (f && f.type === 'application/pdf') {
       const dt = new DataTransfer(); dt.items.add(f); fileInput.files = dt.files;
       fileChosen.textContent = 'Fichier : ' + f.name; dropZone.classList.add('has-file');
+    }
+  });
+
+  // Drag & drop — Annexe
+  const annexeZone   = document.getElementById('annexeZone');
+  const annexeInput  = document.getElementById('annexeFile');
+  const annexeChosen = document.getElementById('annexeChosen');
+
+  annexeInput.addEventListener('change', () => {
+    const f = annexeInput.files[0];
+    if (f) { annexeChosen.textContent = 'Fichier : ' + f.name; annexeZone.classList.add('has-file'); }
+  });
+  annexeZone.addEventListener('dragover', e => { e.preventDefault(); annexeZone.classList.add('over'); });
+  annexeZone.addEventListener('dragleave', () => annexeZone.classList.remove('over'));
+  annexeZone.addEventListener('drop', e => {
+    e.preventDefault(); annexeZone.classList.remove('over');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type === 'application/pdf') {
+      const dt = new DataTransfer(); dt.items.add(f); annexeInput.files = dt.files;
+      annexeChosen.textContent = 'Fichier : ' + f.name; annexeZone.classList.add('has-file');
     }
   });
 
@@ -301,6 +332,8 @@
         fd.append('cfcLibelle2',  document.getElementById('cfcLibelle2').value.trim());
       }
       fd.append('devis', fileInput.files[0]);
+      const annexeFile = document.getElementById('annexeFile').files[0];
+      if (annexeFile) fd.append('annexe', annexeFile);
 
       const resp = await fetch('/api/generer', { method: 'POST', body: fd });
       if (!resp.ok) {
