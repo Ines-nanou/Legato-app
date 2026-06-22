@@ -1,4 +1,4 @@
-// api/generer.js — v3 — support 1 ou 2 lots dans le meme PDF
+// api/generer.js — v4 — polices TTF + accents + montants manuscrits
 
 const path = require('path');
 const fs   = require('fs');
@@ -33,8 +33,8 @@ function parseForm(req) {
 }
 
 function dateFr(d = new Date()) {
-  const m = ['janvier','fevrier','mars','avril','mai','juin',
-             'juillet','aout','septembre','octobre','novembre','decembre'];
+  const m = ['janvier','février','mars','avril','mai','juin',
+             'juillet','août','septembre','octobre','novembre','décembre'];
   return `${d.getDate()} ${m[d.getMonth()]} ${d.getFullYear()}`;
 }
 
@@ -43,14 +43,17 @@ async function extraireInfosDevis(buf, nbLots) {
   const Anthropic = require('@anthropic-ai/sdk');
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-  const promptUnique = `Extrais les infos de ce devis. Retourne UNIQUEMENT un JSON valide sans markdown :
+  const instrManuscrit = `RÈGLE IMPORTANTE sur les montants manuscrits : Si un montant imprimé est barré et qu'un montant est réécrit à la main à côté ou en dessous, tu dois TOUJOURS utiliser le montant manuscrit et ignorer le montant barré. Par exemple si "CHF 40'044.80" est barré et que "CHF 40'000.-" est écrit à la main, le montant à retenir est CHF 40'000.00.`;
+
+  const promptUnique = `Extrais les informations de ce devis. ${instrManuscrit}
+Retourne UNIQUEMENT un JSON valide sans markdown :
 {
-  "adresseEntreprise": "rue et numero",
+  "adresseEntreprise": "rue et numéro de l'entreprise",
   "npVilleEntreprise": "NPA et ville",
-  "telephoneEntreprise": "telephone(s)",
+  "telephoneEntreprise": "téléphone(s)",
   "devis": [
     {
-      "noDevis": "numero du devis",
+      "noDevis": "numéro du devis",
       "dateDevis": "date JJ.MM.AAAA",
       "lignesFinancieres": [
         { "label": "Montant total brut", "montant": "X'XXX.XX", "bold": true },
@@ -62,17 +65,17 @@ async function extraireInfosDevis(buf, nbLots) {
     }
   ]
 }
-Inclure uniquement les lignes financieres presentes. Ne jamais inventer.`;
+Inclure uniquement les lignes financières présentes. Ne jamais inventer.`;
 
-  const promptDouble = `Ce PDF contient 2 devis distincts de la meme entreprise. Extrais les infos des 2.
+  const promptDouble = `Ce PDF contient 2 devis distincts de la même entreprise. ${instrManuscrit}
 Retourne UNIQUEMENT un JSON valide sans markdown :
 {
-  "adresseEntreprise": "rue et numero",
+  "adresseEntreprise": "rue et numéro",
   "npVilleEntreprise": "NPA et ville",
-  "telephoneEntreprise": "telephone(s)",
+  "telephoneEntreprise": "téléphone(s)",
   "devis": [
     {
-      "noDevis": "numero du premier devis",
+      "noDevis": "numéro du premier devis",
       "dateDevis": "date JJ.MM.AAAA",
       "lignesFinancieres": [
         { "label": "Montant total brut", "montant": "X'XXX.XX", "bold": true },
@@ -83,7 +86,7 @@ Retourne UNIQUEMENT un JSON valide sans markdown :
       ]
     },
     {
-      "noDevis": "numero du deuxieme devis",
+      "noDevis": "numéro du deuxième devis",
       "dateDevis": "date JJ.MM.AAAA",
       "lignesFinancieres": [
         { "label": "Montant total brut", "montant": "X'XXX.XX", "bold": true },
@@ -93,9 +96,8 @@ Retourne UNIQUEMENT un JSON valide sans markdown :
     }
   ]
 }
-Le premier element du tableau = premier devis trouve dans le PDF.
-Le deuxieme element = deuxieme devis.
-Inclure uniquement les lignes financieres reellement presentes. Ne jamais inventer.`;
+Premier élément = premier devis dans le PDF. Deuxième = deuxième devis.
+Inclure uniquement les lignes présentes. Ne jamais inventer.`;
 
   const resp = await client.messages.create({
     model: 'claude-sonnet-4-6',
@@ -105,11 +107,11 @@ Inclure uniquement les lignes financieres reellement presentes. Ne jamais invent
       { type: 'text', text: nbLots === 2 ? promptDouble : promptUnique }
     ]}]
   });
+
   const raw = resp.content[0].text;
-  // Extraire le JSON meme si Claude ajoute du texte avant ou apres
   const start = raw.indexOf('{');
   const end   = raw.lastIndexOf('}');
-  if (start === -1 || end === -1) throw new Error('Reponse IA invalide : JSON non trouve');
+  if (start === -1 || end === -1) throw new Error('Réponse IA invalide : JSON non trouvé');
   return JSON.parse(raw.slice(start, end + 1));
 }
 
@@ -175,7 +177,7 @@ async function pageLettreGarde(pdfDoc, fonts, logoImg, infos, fd) {
   page.drawText('Legato SA', { x: ML, y, font: B, size: 10, color: BLACK }); y -= 13;
   page.drawText('Rue de la Plaine 46', { x: ML, y, font: R, size: 9, color: BLACK }); y -= 12;
   page.drawText('1400 Yverdon-les-Bains', { x: ML, y, font: R, size: 9, color: BLACK }); y -= 12;
-  page.drawText('024 426 77 00  .  info@legato-eg.ch', { x: ML, y, font: R, size: 9, color: BLACK });
+  page.drawText('024 426 77 00  ·  info@legato-eg.ch', { x: ML, y, font: R, size: 9, color: BLACK });
 
   let ey = PH - 215;
   const nomComplet = `${fd.nomEntreprise} ${fd.formeJuridique}`;
@@ -188,9 +190,8 @@ async function pageLettreGarde(pdfDoc, fonts, logoImg, infos, fd) {
 
   page.drawText('Concerne :', { x: ML, y, font: B, size: 9, color: BLACK });
   page.drawText("Votre exemplaire du contrat d'entreprise", { x: ML + 68, y, font: R, size: 9, color: BLACK }); y -= 17;
-  page.drawText(`Projet : ${fd.nomChantier} -- ${fd.adresseProjet}`, { x: ML, y, font: R, size: 9, color: DGRAY }); y -= 13;
+  page.drawText(`Projet : ${fd.nomChantier} — ${fd.adresseProjet}`, { x: ML, y, font: R, size: 9, color: DGRAY }); y -= 13;
 
-  // Lister tous les CFC
   fd.lots.forEach(lot => {
     page.drawText(`CFC ${lot.cfcNumero}  ${lot.cfcLibelle}`, { x: ML, y, font: R, size: 9, color: DGRAY });
     y -= 13;
@@ -199,14 +200,14 @@ async function pageLettreGarde(pdfDoc, fonts, logoImg, infos, fd) {
 
   page.drawText('Madame, Monsieur,', { x: ML, y, font: R, size: 9, color: BLACK }); y -= 17;
   y = drawWrapped(page, R,
-    "Vous trouverez ci-joint votre contrat d'entreprise en deux exemplaires, les conditions generales de Legato SA ainsi que le devis correspondant. Les instructions relatives a la suite a donner figurent en page suivante.",
+    "Vous trouverez ci-joint votre contrat d'entreprise en deux exemplaires, les conditions générales de Legato SA ainsi que le devis correspondant. Les instructions relatives à la suite à donner figurent en page suivante.",
     ML, y, 9, BLACK, CW);
   y -= 30;
   page.drawText('Meilleures salutations,', { x: ML, y, font: R, size: 9, color: BLACK }); y -= 15;
   page.drawText('Legato SA', { x: ML, y, font: B, size: 9, color: BLACK });
 }
 
-// ─── Recto contrat (articles 1 a 3.2 debut) ──────────────────────────────────
+// ─── Recto contrat ────────────────────────────────────────────────────────────
 async function pageContratRecto(pdfDoc, fonts, logoImg, infoDevis, infos, lot, fd) {
   const { R, B } = fonts;
   const page = pdfDoc.addPage([PW, PH]);
@@ -225,7 +226,7 @@ async function pageContratRecto(pdfDoc, fonts, logoImg, infoDevis, infos, lot, f
   page.drawRectangle({ x: bXR, y: bY - bH, width: bWR, height: bH, borderColor: GRAY, borderWidth: 0.5, color: WHITE });
 
   let by = bY - 9;
-  page.drawText("MAITRE D'OUVRAGE", { x: bXL+7, y: by, font: R, size: 7, color: GRAY }); by -= 13;
+  page.drawText("MAÎTRE D'OUVRAGE", { x: bXL+7, y: by, font: R, size: 7, color: GRAY }); by -= 13;
   page.drawText('Legato SA',              { x: bXL+7, y: by, font: B, size: 9, color: BLACK }); by -= 11;
   page.drawText('Rue de la Plaine 46',    { x: bXL+7, y: by, font: R, size: 8.5, color: BLACK }); by -= 10;
   page.drawText('1400 Yverdon-les-Bains', { x: bXL+7, y: by, font: R, size: 8.5, color: BLACK }); by -= 10;
@@ -243,7 +244,7 @@ async function pageContratRecto(pdfDoc, fonts, logoImg, infoDevis, infos, lot, f
   page.drawText(`CFC ${lot.cfcNumero}  ${lot.cfcLibelle}`, { x: ML, y, font: B, size: 9, color: BLACK }); y -= 12;
   page.drawText(`Selon devis ${infoDevis.noDevis || '...'} du ${infoDevis.dateDevis || '...'}`, { x: ML, y, font: R, size: 8.5, color: GRAY }); y -= 17;
 
-  page.drawText('Recapitulatif :', { x: ML, y, font: B, size: 9, color: BLACK }); y -= 13;
+  page.drawText('Récapitulatif :', { x: ML, y, font: B, size: 9, color: BLACK }); y -= 13;
   const lignes = infoDevis.lignesFinancieres || [];
   for (const lg of lignes) {
     const f = lg.bold ? B : R;
@@ -255,65 +256,64 @@ async function pageContratRecto(pdfDoc, fonts, logoImg, infoDevis, infos, lot, f
   y -= 8;
   page.drawLine({ start: { x: ML, y }, end: { x: MR, y }, thickness: 0.3, color: GRAY }); y -= 14;
 
+  // ── Articles 1 à 3.2 (début) ──────────────────────────────────────────────
   y = artTitle(page, B, 'Article 1 : Objet du contrat', y);
-  y = drawBullet(page, R, "Le Maitre d'ouvrage est une entreprise generale construisant des villas ou autres batiments cles en main. Il entend confier a l'entrepreneur les travaux precites.", ML+8, y, CW-8); y -= 7;
+  y = drawBullet(page, R, "Le Maître d'ouvrage est une entreprise générale construisant des villas ou autres bâtiments clés en main. Il entend confier à l'entrepreneur les travaux précités.", ML+8, y, CW-8); y -= 7;
 
   y = artTitle(page, B, 'Article 2 : Prix', y);
-  y = drawBullet(page, R, "Les plus-et/ou moins-values seront precisees de cas en cas par commande ecrite du Maitre d'ouvrage.", ML+8, y, CW-8);
-  y = drawBullet(page, R, "Le Maitre d'ouvrage pourra refuser le paiement de tous travaux qu'il n'aurait pas expressement commandes ou dont le prix n'aurait pas ete expressement accepte par lui avant leur execution.", ML+8, y, CW-8); y -= 7;
+  y = drawBullet(page, R, "Les plus-et/ou moins-values seront précisées de cas en cas par commande écrite du Maître d'ouvrage.", ML+8, y, CW-8);
+  y = drawBullet(page, R, "Le Maître d'ouvrage pourra refuser le paiement de tous travaux qu'il n'aurait pas expressément commandés ou dont le prix n'aurait pas été expressément accepté par lui avant leur exécution.", ML+8, y, CW-8); y -= 7;
 
-  y = artTitle(page, B, 'Article 3.1 : Delais', y);
-  y = drawBullet(page, R, "Avant le debut de la construction, le Maitre d'ouvrage remet a l'entrepreneur un planning indiquant la periode pendant laquelle il doit realiser les travaux qui lui incombent et un delai d'execution.", ML+8, y, CW-8);
-  y = drawBullet(page, R, "L'entrepreneur s'engage a realiser les travaux pendant cette periode et delai indique. Il ne peut en aucun cas invoquer un manque ou l'absence (pour quelque motif que ce soit) de personnel pour retarder l'execution des travaux. En revanche, la societe Legato SA s'engage a faire les choix et details dans des delais acceptables.", ML+8, y, CW-8);
-  y = drawBullet(page, R, "L'entrepreneur s'engage a suivre les ordres et les instructions donnes par le Maitre d'ouvrage qui est seul habilite a planifier et a coordonner la construction de l'ouvrage entre les divers maitres d'etat. L'entrepreneur a l'obligation d'assister aux reunions de chantier prevues, sur convocation du Maitre d'ouvrage.", ML+8, y, CW-8);
+  y = artTitle(page, B, 'Article 3.1 : Délais', y);
+  y = drawBullet(page, R, "Avant le début de la construction, le Maître d'ouvrage remet à l'entrepreneur un planning indiquant la période pendant laquelle il doit réaliser les travaux qui lui incombent et un délai d'exécution.", ML+8, y, CW-8);
+  y = drawBullet(page, R, "L'entrepreneur s'engage à réaliser les travaux pendant cette période et délai indiqué. Il ne peut en aucun cas invoquer un manque ou l'absence (pour quelque motif que ce soit) de personnel pour retarder l'exécution des travaux. En revanche, la société Legato SA s'engage à faire les choix et détails dans des délais acceptables.", ML+8, y, CW-8);
+  y = drawBullet(page, R, "L'entrepreneur s'engage à suivre les ordres et les instructions donnés par le Maître d'ouvrage qui est seul habilité à planifier et à coordonner la construction de l'ouvrage entre les divers maîtres d'état. L'entrepreneur a l'obligation d'assister aux réunions de chantier prévues, sur convocation du Maître d'ouvrage.", ML+8, y, CW-8);
   y = drawBullet(page, R, "Pour le surplus, l'art. 92 de la norme SIA 118 est applicable.", ML+8, y, CW-8); y -= 7;
 
-  y = artTitle(page, B, 'Article 3.2 : Penalites', y);
-  y = drawBullet(page, R, "Le planning detaille transmis par la Direction des Travaux est repute accepte en l'absence de reserve ecrite dans un delai de 5 jours ouvrables", ML+8, y, CW-8);
-  y = drawBullet(page, R, "Tout retard constate par rapport au planning fera l'objet d'un courrier de constat adresse a l'entreprise", ML+8, y, CW-8);
-  y = drawBullet(page, R, "L'entreprise devra mettre les moyens pour rattraper ce retard dans un delai de 3 jours ouvrables.", ML+8, y, CW-8);
-  drawBullet(page, R, "A defaut de retablissement de la situation dans le delai imparti, une mise en demeure sera notifiee.", ML+8, y, CW-8);
+  y = artTitle(page, B, 'Article 3.2 : Pénalités', y);
+  y = drawBullet(page, R, "Le planning détaillé transmis par la Direction des Travaux est réputé accepté en l'absence de réserve écrite dans un délai de 5 jours ouvrables", ML+8, y, CW-8);
+  y = drawBullet(page, R, "Tout retard constaté par rapport au planning fera l'objet d'un courrier de constat adressé à l'entreprise", ML+8, y, CW-8);
+  y = drawBullet(page, R, "L'entreprise devra mettre les moyens pour rattraper ce retard dans un délai de 3 jours ouvrables.", ML+8, y, CW-8);
+  drawBullet(page, R, "À défaut de rétablissement de la situation dans le délai imparti, une mise en demeure sera notifiée.", ML+8, y, CW-8);
 }
 
-// Référence à infos dans les fonctions — correction : passer infos explicitement
-// ─── Verso contrat (suite 3.2, articles 4-7, signatures) ─────────────────────
+// ─── Verso contrat ────────────────────────────────────────────────────────────
 async function pageContratVerso(pdfDoc, fonts, infoDevis, infos, lot, fd) {
   const { R, B } = fonts;
   const page = pdfDoc.addPage([PW, PH]);
-  // Pas de logo sur le verso
   let y = PH - 55;
 
-  y = drawBullet(page, R, "Apres mise en demeure restee sans effet, une penalite de CHF 500.- par jour calendaire de retard pourra etre appliquee, plafonnee a 10 % du montant du marche.", ML+8, y, CW-8);
-  y = drawBullet(page, R, "Tous les frais induits par le retard (coordination supplementaire, immobilisation d'autres entreprises, locations, moyens provisoires, deplacements supplementaires de la Direction des Travaux, etc.) seront factures a l'entreprise responsable.", ML+8, y, CW-8);
-  y = drawBullet(page, R, "En cas de retard mettant en peril le planning general du chantier, la Direction des Travaux pourra exiger un renforcement immediat des effectifs.", ML+8, y, CW-8);
-  y = drawBullet(page, R, "Si le retard persiste malgre les mesures precitees, le Maitre d'Ouvrage se reserve le droit de faire executer tout ou partie des prestations par une entreprise tierce aux frais et risques de l'entreprise defaillante.", ML+8, y, CW-8); y -= 7;
+  y = drawBullet(page, R, "Après mise en demeure restée sans effet, une pénalité de CHF 500.- par jour calendaire de retard pourra être appliquée, plafonnée à 10 % du montant du marché.", ML+8, y, CW-8);
+  y = drawBullet(page, R, "Tous les frais induits par le retard (coordination supplémentaire, immobilisation d'autres entreprises, locations, moyens provisoires, déplacements supplémentaires de la Direction des Travaux, etc.) seront facturés à l'entreprise responsable.", ML+8, y, CW-8);
+  y = drawBullet(page, R, "En cas de retard mettant en péril le planning général du chantier, la Direction des Travaux pourra exiger un renforcement immédiat des effectifs.", ML+8, y, CW-8);
+  y = drawBullet(page, R, "Si le retard persiste malgré les mesures précitées, le Maître d'Ouvrage se réserve le droit de faire exécuter tout ou partie des prestations par une entreprise tierce aux frais et risques de l'entreprise défaillante.", ML+8, y, CW-8); y -= 7;
 
   y = artTitle(page, B, "Article 4 : Assurance de l'entreprise selon art. 26 al. 1 de la norme SIA 118", y);
-  y = drawBullet(page, R, "L'entrepreneur declare etre couvert pour les dommages causes aux personnes ou aux biens par une assurance responsabilite civile a l'egard des tiers.", ML+8, y, CW-8);
-  page.drawText('Compagnie et n.  :                     .........................................................', { x: ML+8, y, font: R, size: 9, color: BLACK }); y -= 12;
+  y = drawBullet(page, R, "L'entrepreneur déclare être couvert pour les dommages causés aux personnes ou aux biens par une assurance responsabilité civile à l'égard des tiers.", ML+8, y, CW-8);
+  page.drawText('Compagnie et n° :                      .........................................................', { x: ML+8, y, font: R, size: 9, color: BLACK }); y -= 12;
   page.drawText('Prestation maximale par dommage :       .........................................................', { x: ML+8, y, font: R, size: 9, color: BLACK }); y -= 16;
 
   y = artTitle(page, B, 'Article 5 : Conditions', y);
   page.drawText('5.1 Conditions de paiement (selon normes SIA 118 art. 144)', { x: ML+8, y, font: B, size: 9, color: BLACK }); y -= 13;
   y = drawBullet(page, R, "90% sur situations suivant l'avance des travaux.", ML+8, y, CW-8);
-  y = drawBullet(page, R, "10% a la fin des travaux (receptionnes par le Maitre d'ouvrage), contre remise par l'entrepreneur d'une garantie bancaire ou d'assurance et apres le versement du solde du contrat d'entreprise generale par le maitre d'ouvrage.", ML+8, y, CW-8); y -= 5;
-  page.drawText('5.2 Conditions generales', { x: ML+8, y, font: B, size: 9, color: BLACK }); y -= 13;
-  y = drawBullet(page, R, "Les CONDITIONS GENERALES POUR UN CONTRAT D'ENTREPRISE de Legato SA font partie integrante du present contrat.", ML+8, y, CW-8);
-  y = drawBullet(page, R, "En cas de contradiction entre divers documents du contrat, l'ordre de priorite s'etablit selon l'art. 21 al. 1 de la norme SIA 118, dans le cas d'une contre-offre selon l'art. 22 al. 4.", ML+8, y, CW-8); y -= 7;
+  y = drawBullet(page, R, "10% à la fin des travaux (réceptionnés par le Maître d'ouvrage), contre remise par l'entrepreneur d'une garantie bancaire ou d'assurance et après le versement du solde du contrat d'entreprise générale par le maître d'ouvrage.", ML+8, y, CW-8); y -= 5;
+  page.drawText('5.2 Conditions générales', { x: ML+8, y, font: B, size: 9, color: BLACK }); y -= 13;
+  y = drawBullet(page, R, "Les CONDITIONS GÉNÉRALES POUR UN CONTRAT D'ENTREPRISE de Legato SA font partie intégrante du présent contrat.", ML+8, y, CW-8);
+  y = drawBullet(page, R, "En cas de contradiction entre divers documents du contrat, l'ordre de priorité s'établit selon l'art. 21 al. 1 de la norme SIA 118, dans le cas d'une contre-offre selon l'art. 22 al. 4.", ML+8, y, CW-8); y -= 7;
 
   y = artTitle(page, B, 'Article 6 : Garanties', y);
-  y = drawBullet(page, R, "Les garanties donnees par l'entrepreneur sur les travaux effectues contre les defauts apparents et caches sont conformes a celles prevues par la norme SIA 118, sans restriction.", ML+8, y, CW-8);
-  y = drawBullet(page, R, "Le Maitre d'ouvrage est en droit de reclamer a l'entrepreneur le remboursement integral de toute indemnite que le Maitre d'ouvrage devrait verser au proprietaire (maitre de l'ouvrage du contrat d'entreprise generale liant Legato SA) a la suite d'une faute ou d'une negligence commise par l'entrepreneur dans l'execution des travaux qui lui incombent.", ML+8, y, CW-8); y -= 7;
+  y = drawBullet(page, R, "Les garanties données par l'entrepreneur sur les travaux effectués contre les défauts apparents et cachés sont conformes à celles prévues par la norme SIA 118, sans restriction.", ML+8, y, CW-8);
+  y = drawBullet(page, R, "Le Maître d'ouvrage est en droit de réclamer à l'entrepreneur le remboursement intégral de toute indemnité que le Maître d'ouvrage devrait verser au propriétaire (maître de l'ouvrage du contrat d'entreprise générale liant Legato SA) à la suite d'une faute ou d'une négligence commise par l'entrepreneur dans l'exécution des travaux qui lui incombent.", ML+8, y, CW-8); y -= 7;
 
   y = artTitle(page, B, 'Article 7 : For selon art. 37 de la norme SIA 118', y);
   y = drawBullet(page, R, "Les parties conviennent qu'en cas de contestation, le for sera au lieu de situation de l'ouvrage.", ML+8, y, CW-8);
-  y = drawBullet(page, R, "Le present contrat, etabli en 2 exemplaires engage, reciproquement par leur signature, l'entrepreneur (le fournisseur) et le Maitre d'ouvrage.", ML+8, y, CW-8); y -= 25;
+  y = drawBullet(page, R, "Le présent contrat, établi en 2 exemplaires engage, réciproquement par leur signature, l'entrepreneur (le fournisseur) et le Maître d'ouvrage.", ML+8, y, CW-8); y -= 25;
 
   page.drawText(`Lieu et date : Yverdon-les-Bains, le ${dateFr()}`, { x: ML, y, font: R, size: 9, color: BLACK }); y -= 35;
 
   const nomComplet = `${fd.nomEntreprise} ${fd.formeJuridique}`;
   const sxR = MR - 200;
-  page.drawText("Le Maitre d'ouvrage", { x: ML,  y, font: B, size: 8.5, color: BLACK });
+  page.drawText("Le Maître d'ouvrage", { x: ML,  y, font: B, size: 8.5, color: BLACK });
   page.drawText("L'entrepreneur",       { x: sxR, y, font: B, size: 8.5, color: BLACK }); y -= 13;
   page.drawText('Legato SA',            { x: ML,  y, font: R, size: 9, color: BLACK });
   page.drawText(nomComplet,             { x: sxR, y, font: R, size: 9, color: BLACK }); y -= 32;
@@ -323,11 +323,10 @@ async function pageContratVerso(pdfDoc, fonts, infoDevis, infos, lot, fd) {
 
 // ─── HANDLER PRINCIPAL ───────────────────────────────────────────────────────
 module.exports = async (req, res) => {
-  if (req.method !== 'POST') { res.status(405).send('Methode non autorisee'); return; }
+  if (req.method !== 'POST') { res.status(405).send('Méthode non autorisée'); return; }
   try {
     const { fields, files } = await parseForm(req);
 
-    // Validation champs communs
     const reqF = ['nomChantier','adresseProjet','nomEntreprise','formeJuridique','cfcNumero1','cfcLibelle1'];
     for (const f of reqF) {
       if (!fields[f] || !fields[f].toString().trim()) {
@@ -335,7 +334,6 @@ module.exports = async (req, res) => {
       }
     }
 
-    // Construction des lots
     const lots = [{ cfcNumero: fields.cfcNumero1.toString().trim(), cfcLibelle: fields.cfcLibelle1.toString().trim() }];
     if (fields.cfcNumero2 && fields.cfcNumero2.toString().trim() && fields.cfcLibelle2 && fields.cfcLibelle2.toString().trim()) {
       lots.push({ cfcNumero: fields.cfcNumero2.toString().trim(), cfcLibelle: fields.cfcLibelle2.toString().trim() });
@@ -354,14 +352,12 @@ module.exports = async (req, res) => {
       res.status(400).json({ error: 'Devis PDF manquant' }); return;
     }
 
-    // Extraction IA (1 ou 2 devis)
     const infos = await extraireInfosDevis(devisBuffer, lots.length);
-    // S'assurer que infos.devis est un tableau avec assez d'elements
     if (!infos.devis || !Array.isArray(infos.devis) || infos.devis.length === 0) {
       infos.devis = [{ noDevis: '', dateDevis: '', lignesFinancieres: [] }];
     }
     while (infos.devis.length < lots.length) {
-      infos.devis.push(infos.devis[infos.devis.length - 1]); // fallback : dupliquer le dernier
+      infos.devis.push(infos.devis[infos.devis.length - 1]);
     }
 
     // Assets
@@ -371,34 +367,36 @@ module.exports = async (req, res) => {
     const logoPath   = path.join(assetsDir, 'logo_legato.png');
     const logoBytes  = fs.existsSync(logoPath) ? fs.readFileSync(logoPath) : null;
 
+    // Polices TTF (avec accents)
+    const regularTTF = fs.readFileSync(path.join(assetsDir, 'Lato-Regular.ttf'));
+    const boldTTF    = fs.readFileSync(path.join(assetsDir, 'Lato-Bold.ttf'));
+
     const pdfDoc = await PDFDocument.create();
-    const B = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-    const R = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const B = await pdfDoc.embedFont(boldTTF);
+    const R = await pdfDoc.embedFont(regularTTF);
     const fonts = { B, R };
+
     let logoImg = null;
     if (logoBytes) { try { logoImg = await pdfDoc.embedPng(logoBytes); } catch (_) {} }
 
-    // 1. Lettre de garde commune
+    // 1. Lettre de garde
     await pageLettreGarde(pdfDoc, fonts, logoImg, infos, fd);
 
     // 2. Fiche attestations
     const fichePdf = await PDFDocument.load(ficheBytes);
     (await pdfDoc.copyPages(fichePdf, fichePdf.getPageIndices())).forEach(p => pdfDoc.addPage(p));
 
-    // 3+. Pour chaque lot : contrat x2 exemplaires
+    // 3+. Contrats par lot x2 exemplaires
     for (let i = 0; i < lots.length; i++) {
       const lot = lots[i];
       const infoDevis = infos.devis[i];
-
-      // Exemplaire 1
       await pageContratRecto(pdfDoc, fonts, logoImg, infoDevis, infos, lot, fd);
       await pageContratVerso(pdfDoc, fonts, infoDevis, infos, lot, fd);
-      // Exemplaire 2
       await pageContratRecto(pdfDoc, fonts, logoImg, infoDevis, infos, lot, fd);
       await pageContratVerso(pdfDoc, fonts, infoDevis, infos, lot, fd);
     }
 
-    // Conditions generales (une seule fois)
+    // Conditions générales
     const cgPdf = await PDFDocument.load(cgBytes);
     (await pdfDoc.copyPages(cgPdf, cgPdf.getPageIndices())).forEach(p => pdfDoc.addPage(p));
 
@@ -416,6 +414,6 @@ module.exports = async (req, res) => {
 
   } catch (err) {
     console.error('ERREUR:', err);
-    res.status(500).json({ error: 'Erreur generation', detail: err.message });
+    res.status(500).json({ error: 'Erreur génération', detail: err.message });
   }
 };
