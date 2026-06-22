@@ -114,11 +114,11 @@ function artTitle(page, B, titre, y) {
   return y - 14;
 }
 
-// Logo a taille fixe
+// Logo carre — 120pts de cote (comme sur la lettre physique)
 function drawLogo(page, logoImg, xRight, yTop) {
   if (!logoImg) return;
-  const MAX_W = 100, MAX_H = 38;
-  const scale = Math.min(MAX_W / logoImg.width, MAX_H / logoImg.height);
+  const SIDE = 120;
+  const scale = Math.min(SIDE / logoImg.width, SIDE / logoImg.height);
   const lw = logoImg.width * scale;
   const lh = logoImg.height * scale;
   page.drawImage(logoImg, { x: xRight - lw, y: yTop - lh, width: lw, height: lh });
