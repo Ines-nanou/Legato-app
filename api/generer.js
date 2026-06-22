@@ -17,7 +17,6 @@ const PROJET = {
   moEmail: "info@legato-eg.ch",
 };
 
-// Vert Legato officiel = CMYK exact du logo vectoriel (0.78, 0, 0.67, 0)
 const VERT_LEGATO = cmyk(0.78, 0, 0.67, 0);
 
 const PROMPT = `Tu analyses un devis PDF d'une entreprise sous-traitante adress\u00e9 \u00e0 Legato SA (ma\u00eetre d'ouvrage, entreprise g\u00e9n\u00e9rale de construction).
@@ -64,7 +63,6 @@ function dateAujourdhui() {
   return `${d.getDate()} ${mois[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-// Conversion texte -> lignes avec retour automatique
 function wrap(text, size, maxW, font) {
   const words = String(text).split(" ");
   const lines = [];
@@ -78,7 +76,6 @@ function wrap(text, size, maxW, font) {
   return lines;
 }
 
-// Charge le logo PNG (rectangle vert officiel) une seule fois
 async function chargerLogo(doc) {
   try {
     const logoPath = path.join(process.cwd(), "assets", "logo_legato.png");
@@ -102,31 +99,25 @@ async function buildPdf(fields, devisBytes) {
   // ---- PAGE 1 : page de garde ----
   {
     const p = doc.addPage([W, H]);
-
-    // Logo officiel en haut \u00e0 droite (largeur ~20% de la page, proportions natives conserv\u00e9es)
     if (logo) {
       const logoW = 0.20 * W;
       const logoH = logoW * (logo.height / logo.width);
       p.drawImage(logo, { x: W - M - logoW, y: H - 24 - logoH, width: logoW, height: logoH });
     }
-
     p.drawText(PROJET.moNom, { x: M, y: H - 70, size: 11, font: bold, color: black });
     p.drawText(PROJET.moAdresse, { x: M, y: H - 85, size: 9, font, color: gray });
     p.drawText(PROJET.moNpaVille, { x: M, y: H - 97, size: 9, font, color: gray });
     p.drawText(`${PROJET.moTel}  \u00b7  ${PROJET.moEmail}`, { x: M, y: H - 109, size: 9, font, color: gray });
-
     const ay = H - 250;
     [fields.entrepriseNom, fields.entrepriseAdresse, fields.entrepriseNpaVille].filter(Boolean).forEach((l, i) => {
       p.drawText(String(l), { x: M + 250, y: ay - i * 16, size: 11, font: i === 0 ? bold : font, color: black });
     });
-
     p.drawText(`Yverdon-les-Bains, le ${today}`, { x: M, y: H - 360, size: 10, font, color: black });
     p.drawText("Concerne :", { x: M, y: H - 400, size: 10, font: bold, color: black });
     p.drawText("Votre exemplaire du contrat d'entreprise", { x: M + 70, y: H - 400, size: 10, font, color: black });
     p.drawText(`Projet : ${PROJET.nom} \u2014 ${PROJET.adresse}`, { x: M, y: H - 420, size: 9, font, color: gray });
     if (fields.cfc || fields.cfcLibelle)
       p.drawText(`CFC ${fields.cfc || ""}  ${fields.cfcLibelle || ""}`.trim(), { x: M, y: H - 433, size: 9, font, color: gray });
-
     p.drawText("Madame, Monsieur,", { x: M, y: H - 470, size: 10, font, color: black });
     const body = "Vous trouverez ci-joint votre contrat d'entreprise en deux exemplaires, les conditions g\u00e9n\u00e9rales de Legato SA ainsi que le devis correspondant. Les instructions relatives \u00e0 la suite \u00e0 donner figurent en page suivante.";
     let y = H - 490;
@@ -135,7 +126,7 @@ async function buildPdf(fields, devisBytes) {
     p.drawText(PROJET.moNom, { x: M, y: y - 42, size: 10, font: bold, color: black });
   }
 
-  // ---- PAGE 2 : Fiche de contr\u00f4le des attestations (fusionn\u00e9e depuis assets) ----
+  // ---- PAGE 2 : Fiche de contr\u00f4le des attestations ----
   try {
     const fichePath = path.join(process.cwd(), "assets", "fiche_attestations.pdf");
     const ficheBytes = fs.readFileSync(fichePath);
@@ -152,7 +143,6 @@ async function buildPdf(fields, devisBytes) {
     let y = H - 60;
     const nl = (need) => { if (y - need < 70) { p = doc.addPage([W, H]); y = H - 60; } };
 
-    // Logo officiel en haut \u00e0 droite, align\u00e9 avec le bloc titre, au-dessus du cadre ENTREPRENEUR
     if (logo) {
       const logoH = 64;
       const logoW = logoH * (logo.width / logo.height);
@@ -160,7 +150,6 @@ async function buildPdf(fields, devisBytes) {
     }
 
     p.drawText("DOCUMENT CONTRACTUEL", { x: M, y, size: 8, font, color: gray }); y -= 22;
-    // Titre en VERT Legato officiel
     p.drawText("Contrat d'entreprise", { x: M, y, size: 18, font: bold, color: VERT_LEGATO }); y -= 16;
     p.drawText(PROJET.nom, { x: M, y, size: 10, font, color: black }); y -= 12;
     p.drawText(PROJET.adresse, { x: M, y, size: 10, font, color: gray }); y -= 26;
@@ -199,14 +188,17 @@ async function buildPdf(fields, devisBytes) {
     y -= 12;
 
     const arts = [
-      ["1   OBJET DU CONTRAT", ["Le Ma\u00eetre d'ouvrage est une entreprise g\u00e9n\u00e9rale construisant des villas ou autres b\u00e2timents cl\u00e9s en main. Il entend confier \u00e0 l'entrepreneur les travaux pr\u00e9cit\u00e9s."]],
-      ["2   PRIX", ["Les plus et/ou moins-values seront pr\u00e9cis\u00e9es de cas en cas par commande \u00e9crite du Ma\u00eetre d'ouvrage.", "Le Ma\u00eetre d'ouvrage pourra refuser le paiement de tous travaux qu'il n'aurait pas express\u00e9ment command\u00e9s ou dont le prix n'aurait pas \u00e9t\u00e9 express\u00e9ment accept\u00e9 par lui avant leur ex\u00e9cution."]],
-      ["3   D\u00c9LAIS", ["Avant le d\u00e9but de la construction, le Ma\u00eetre d'ouvrage remet \u00e0 l'entrepreneur un planning indiquant la p\u00e9riode pendant laquelle il doit r\u00e9aliser les travaux qui lui incombent et un d\u00e9lai d'ex\u00e9cution.", "L'entrepreneur s'engage \u00e0 r\u00e9aliser les travaux pendant cette p\u00e9riode et ce d\u00e9lai. Il ne peut en aucun cas invoquer un manque ou l'absence de personnel pour retarder l'ex\u00e9cution des travaux. En revanche, Legato SA s'engage \u00e0 faire les choix et d\u00e9tails dans des d\u00e9lais acceptables.", "L'entrepreneur s'engage \u00e0 suivre les ordres et instructions du Ma\u00eetre d'ouvrage, seul habilit\u00e9 \u00e0 planifier et coordonner la construction de l'ouvrage. Il a l'obligation d'assister aux r\u00e9unions de chantier, sur convocation du Ma\u00eetre d'ouvrage.", "Pour le surplus, l'art. 92 de la norme SIA 118 est applicable."]],
-      ["4   ASSURANCE DE L'ENTREPRISE \u2014 ART. 26 AL. 1 SIA 118", ["L'entrepreneur d\u00e9clare \u00eatre couvert pour les dommages caus\u00e9s aux personnes ou aux biens par une assurance responsabilit\u00e9 civile \u00e0 l'\u00e9gard des tiers.", "Compagnie et n\u00b0 : \u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026", "Prestation max. par dommage : \u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026"]],
-      ["5   CONDITIONS", ["5.1 Conditions de paiement \u2014 art. 144 SIA 118 : 90% sur situations suivant l'avancement des travaux ; 10% \u00e0 la fin des travaux (r\u00e9ceptionn\u00e9s par le Ma\u00eetre d'ouvrage), contre remise d'une garantie bancaire ou d'assurance, et apr\u00e8s versement du solde du contrat d'entreprise g\u00e9n\u00e9rale.", "5.2 Les Conditions g\u00e9n\u00e9rales pour un contrat d'entreprise de Legato SA font partie int\u00e9grante du pr\u00e9sent contrat. En cas de contradiction, l'ordre de priorit\u00e9 s'\u00e9tablit selon l'art. 21 al. 1 SIA 118 ; dans le cas d'une contre-offre, selon l'art. 22 al. 4."]],
-      ["6   GARANTIES", ["Les garanties donn\u00e9es par l'entrepreneur sur les travaux effectu\u00e9s contre les d\u00e9fauts apparents et cach\u00e9s sont conformes \u00e0 celles pr\u00e9vues par la norme SIA 118, sans restriction.", "Le Ma\u00eetre d'ouvrage est en droit de r\u00e9clamer \u00e0 l'entrepreneur le remboursement int\u00e9gral de toute indemnit\u00e9 qu'il devrait verser au propri\u00e9taire \u00e0 la suite d'une faute ou n\u00e9gligence commise par l'entrepreneur."]],
-      ["7   FOR \u2014 ART. 37 SIA 118", ["Les parties conviennent qu'en cas de contestation, le for sera au lieu de situation de l'ouvrage. Le pr\u00e9sent contrat, \u00e9tabli en deux exemplaires, engage r\u00e9ciproquement, par leur signature, l'entrepreneur et le Ma\u00eetre d'ouvrage."]],
+      ["Article 1 : Objet du contrat", ["Le Ma\u00eetre d\u2019ouvrage est une entreprise g\u00e9n\u00e9rale construisant des villas ou autres b\u00e2timents cl\u00e9s en main. Il entend confier \u00e0 l\u2019entrepreneur les travaux pr\u00e9cit\u00e9s."]],
+      ["Article 2 : Prix", ["Les plus-et/ou moins-values seront pr\u00e9cis\u00e9es de cas en cas par commande \u00e9crite du Ma\u00eetre d\u2019ouvrage.", "Le Ma\u00eetre d\u2019ouvrage pourra refuser le paiement de tous travaux qu\u2019il n\u2019aurait pas express\u00e9ment command\u00e9s ou dont le prix n\u2019aurait pas \u00e9t\u00e9 express\u00e9ment accept\u00e9 par lui avant leur ex\u00e9cution."]],
+      ["Article 3.1 : D\u00e9lais", ["Avant le d\u00e9but de la construction, le Ma\u00eetre d\u2019ouvrage remet \u00e0 l\u2019entrepreneur un planning indiquant la p\u00e9riode pendant laquelle il doit r\u00e9aliser les travaux qui lui incombent et un d\u00e9lai d\u2019ex\u00e9cution.", "L\u2019entrepreneur s\u2019engage \u00e0 r\u00e9aliser les travaux pendant cette p\u00e9riode et d\u00e9lai indiqu\u00e9. Il ne peut en aucun cas invoquer un manque ou l\u2019absence (pour quelque motif que ce soit) de personnel pour retarder l\u2019ex\u00e9cution des travaux. En revanche, la soci\u00e9t\u00e9 Legato SA s\u2019engage \u00e0 faire les choix et d\u00e9tails dans des d\u00e9lais acceptables.", "L\u2019entrepreneur s\u2019engage \u00e0 suivre les ordres et les instructions donn\u00e9s par le Ma\u00eetre d\u2019ouvrage qui est seul habilit\u00e9 \u00e0 planifier et \u00e0 coordonner la construction de l\u2019ouvrage entre les divers ma\u00eetres d\u2019\u00e9tat. L\u2019entrepreneur a l\u2019obligation d\u2019assister aux r\u00e9unions de chantier pr\u00e9vues, sur convocation du Ma\u00eetre d\u2019ouvrage.", "Pour le surplus, l\u2019art. 92 de la norme SIA 118 est applicable."]],
+      ["Article 3.2 : P\u00e9nalit\u00e9s", ["Le planning d\u00e9taill\u00e9 transmis par la Direction des Travaux est r\u00e9put\u00e9 accept\u00e9 en l'absence de r\u00e9serve \u00e9crite dans un d\u00e9lai de 5 jours ouvrables.", "Tout retard constat\u00e9 par rapport au planning fera l'objet d'un courrier de constat adress\u00e9 \u00e0 l'entreprise.", "L\u2019entreprise devra mettre les moyens pour rattraper ce retard dans un d\u00e9lai de 3 jours ouvrables.", "\u00c0 d\u00e9faut de r\u00e9tablissement de la situation dans le d\u00e9lai imparti, une mise en demeure sera notifi\u00e9e.", "Apr\u00e8s mise en demeure rest\u00e9e sans effet, une p\u00e9nalit\u00e9 de CHF 500.- par jour calendaire de retard pourra \u00eatre appliqu\u00e9e, plafonn\u00e9e \u00e0 10 % du montant du march\u00e9.", "Tous les frais induits par le retard (coordination suppl\u00e9mentaire, immobilisation d'autres entreprises, locations, moyens provisoires, d\u00e9placements suppl\u00e9mentaires de la Direction des Travaux, etc.) seront factur\u00e9s \u00e0 l'entreprise responsable.", "En cas de retard mettant en p\u00e9ril le planning g\u00e9n\u00e9ral du chantier, la Direction des Travaux pourra exiger un renforcement imm\u00e9diat des effectifs.", "Si le retard persiste malgr\u00e9 les mesures pr\u00e9cit\u00e9es, le Ma\u00eetre d'Ouvrage se r\u00e9serve le droit de faire ex\u00e9cuter tout ou partie des prestations par une entreprise tierce aux frais et risques de l'entreprise d\u00e9faillante."]],
+      ["Article 4 : Assurance de l\u2019entreprise selon art. 26 al. 1 de la norme SIA 118", ["L\u2019entrepreneur d\u00e9clare \u00eatre couvert pour les dommages caus\u00e9s aux personnes ou aux biens par une assurance responsabilit\u00e9 civile \u00e0 l\u2019\u00e9gard des tiers.", "Compagnie et n\u00b0 : \u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026..", "Prestation maximale par dommage : \u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026.."]],
+      ["Article 5 : Conditions", ["5.1 Conditions de paiement (selon normes SIA 118 art. 144)", "90% sur situations suivant l\u2019avance des travaux.", "10% \u00e0 la fin des travaux (r\u00e9ceptionn\u00e9s par le Ma\u00eetre d\u2019ouvrage), contre remise par l\u2019entrepreneur d\u2019une garantie bancaire ou d\u2019assurance et apr\u00e8s le versement du solde du contrat d\u2019entreprise g\u00e9n\u00e9rale par le ma\u00eetre d\u2019ouvrage.", "5.2 Conditions g\u00e9n\u00e9rales", "Les CONDITIONS G\u00c9N\u00c9RALES POUR UN CONTRAT D\u2019ENTREPRISE de Legato SA font partie int\u00e9grante du pr\u00e9sent contrat.", "En cas de contradiction entre divers documents du contrat, l\u2019ordre de priorit\u00e9 s\u2019\u00e9tablit selon l\u2019art. 21 al. 1 de la norme SIA 118, dans le cas d\u2019une contre-offre selon l\u2019art. 22 al. 4."]],
+      ["Article 6 : Garanties", ["Les garanties donn\u00e9es par l\u2019entrepreneur sur les travaux effectu\u00e9s contre les d\u00e9fauts apparents et cach\u00e9s sont conformes \u00e0 celles pr\u00e9vues par la norme SIA 118, sans restriction.", "Le Ma\u00eetre d\u2019ouvrage est en droit de r\u00e9clamer \u00e0 l\u2019entrepreneur le remboursement int\u00e9gral de toute indemnit\u00e9 que le Ma\u00eetre d\u2019ouvrage devrait verser au propri\u00e9taire (ma\u00eetre de l\u2019ouvrage du contrat d\u2019entreprise g\u00e9n\u00e9rale liant Legato SA) \u00e0 la suite d\u2019une faute ou d\u2019une n\u00e9gligence commise par l\u2019entrepreneur dans l\u2019ex\u00e9cution des travaux qui lui incombent."]],
+      ["Article 7 : For selon art. 37 de la norme SIA 118", ["Les parties conviennent qu\u2019en cas de contestation, le for sera au lieu de situation de l\u2019ouvrage.", "Le pr\u00e9sent contrat, \u00e9tabli en 2 exemplaires engage, r\u00e9ciproquement par leur signature, l\u2019entrepreneur (le fournisseur) et le Ma\u00eetre d\u2019ouvrage."]],
     ];
+
+
     for (const [title, paras] of arts) {
       nl(40);
       p.drawText(title, { x: M, y, size: 9.5, font: bold, color: black }); y -= 14;
@@ -264,7 +256,6 @@ export default async function handler(req, res) {
       res.status(400).json({ error: "Aucun devis fourni." });
       return;
     }
-
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-4-5-20250929",
@@ -279,7 +270,6 @@ export default async function handler(req, res) {
         },
       ],
     });
-
     const text = (msg.content || []).map((b) => b.text || "").join("\n");
     const clean = text.replace(/```json/gi, "").replace(/```/g, "").trim();
     let fields;
@@ -289,10 +279,8 @@ export default async function handler(req, res) {
       if (a !== -1 && b > a) fields = JSON.parse(clean.slice(a, b + 1));
       else throw new Error("L'IA n'a pas renvoy\u00e9 un JSON exploitable.");
     }
-
     const devisBytes = Buffer.from(devisBase64, "base64");
     const pdfBytes = await buildPdf(fields, devisBytes);
-
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="Contrat_${String(fields.entrepriseNom || "entreprise").replace(/[^a-zA-Z0-9]/g, "_")}.pdf"`);
     res.status(200).send(Buffer.from(pdfBytes));
