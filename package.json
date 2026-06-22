@@ -1,10 +1,10 @@
 {
-  "name": "legato-generateur-contrats",
-  "version": "1.0.0",
-  "description": "Générateur automatique de contrats d'entreprise Legato SA à partir d'un devis PDF",
-  "private": true,
+  "name": "legato-app",
+  "version": "2.0.0",
+  "description": "Generateur de contrats prestataires Legato SA",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.32.1",
+    "@anthropic-ai/sdk": "^0.27.0",
+    "busboy": "^1.6.0",
     "pdf-lib": "^1.17.1"
   }
 }
