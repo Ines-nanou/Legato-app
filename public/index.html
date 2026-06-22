@@ -6,247 +6,78 @@
   <title>Generateur de contrats · Legato SA</title>
   <style>
     :root {
-      --green:      #009C74;
-      --green-dark: #00795a;
-      --green-pale: #f0faf7;
-      --border:     #dde0dc;
-      --text:       #222;
-      --muted:      #666;
-      --error:      #dc2626;
-      --error-bg:   #fef2f2;
+      --green: #009C74; --green-dark: #00795a; --green-pale: #f0faf7;
+      --border: #dde0dc; --text: #222; --muted: #666;
+      --error: #dc2626; --error-bg: #fef2f2;
     }
-
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
-      background: #eef0ee;
-      color: var(--text);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-
-    /* ── En-tete ── */
-    header {
-      background: var(--green);
-      color: #fff;
-      padding: 18px 40px;
-      display: flex;
-      align-items: center;
-      gap: 24px;
-      box-shadow: 0 2px 8px rgba(0,0,0,.15);
-    }
-
-    .logo {
-      font-size: 24px;
-      font-weight: 800;
-      letter-spacing: -.5px;
-      color: #fff;
-      white-space: nowrap;
-    }
-
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; background: #eef0ee; color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+    header { background: var(--green); color: #fff; padding: 18px 40px; display: flex; align-items: center; gap: 24px; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+    .logo { font-size: 22px; font-weight: 800; letter-spacing: -.5px; }
     .logo span { opacity: .65; }
-
     .header-info { margin-left: auto; text-align: right; }
     .header-info h1 { font-size: 16px; font-weight: 600; }
     .header-info p  { font-size: 12px; opacity: .8; margin-top: 2px; }
-
-    /* ── Contenu ── */
-    main {
-      flex: 1;
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-      padding: 36px 20px 48px;
-    }
-
-    .card {
-      background: #fff;
-      border-radius: 10px;
-      box-shadow: 0 2px 12px rgba(0,0,0,.10);
-      padding: 36px 40px;
-      width: 100%;
-      max-width: 680px;
-    }
-
-    /* ── Sections ── */
-    .section-label {
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: .08em;
-      text-transform: uppercase;
-      color: var(--green);
-      border-bottom: 2px solid var(--green);
-      padding-bottom: 6px;
-      margin-bottom: 18px;
-      margin-top: 28px;
-    }
+    main { flex: 1; display: flex; justify-content: center; padding: 32px 20px 48px; }
+    .card { background: #fff; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,.10); padding: 30px 36px; width: 100%; max-width: 680px; }
+    .section-label { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--green); border-bottom: 2px solid var(--green); padding-bottom: 5px; margin-bottom: 15px; margin-top: 24px; }
     .section-label:first-of-type { margin-top: 0; }
-
-    /* ── Grille de champs ── */
-    .grid   { display: grid; gap: 14px; margin-bottom: 14px; }
+    .grid { display: grid; gap: 12px; margin-bottom: 12px; }
     .grid-2 { grid-template-columns: 1fr 1fr; }
     .grid-1 { grid-template-columns: 1fr; }
-
-    @media (max-width: 520px) {
-      .grid-2 { grid-template-columns: 1fr; }
-      .card { padding: 24px 20px; }
-      header { flex-wrap: wrap; }
-    }
-
-    /* ── Champs ── */
-    label {
-      display: block;
-      font-size: 11.5px;
-      font-weight: 600;
-      color: var(--muted);
-      margin-bottom: 5px;
-    }
-
+    label { display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
     label .req { color: var(--error); margin-left: 2px; }
-
-    input[type="text"],
-    select {
-      width: 100%;
-      padding: 9px 12px;
-      border: 1.5px solid var(--border);
-      border-radius: 6px;
-      font-size: 14px;
-      color: var(--text);
-      background: #fff;
-      transition: border-color .15s;
-      appearance: none;
+    input[type="text"], select {
+      width: 100%; padding: 8px 11px; border: 1.5px solid var(--border);
+      border-radius: 6px; font-size: 13px; color: var(--text); background: #fff;
+      transition: border-color .15s; font-family: inherit;
     }
+    select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 11px center; padding-right: 28px; cursor: pointer; }
+    input[type="text"]:focus, select:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px rgba(0,156,116,.12); }
+    input.invalid, select.invalid { border-color: var(--error); box-shadow: 0 0 0 3px rgba(220,38,38,.10); }
 
-    select {
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 12px center;
-      padding-right: 32px;
-      cursor: pointer;
+    /* ── Lot 2 ── */
+    .lot2-box { border: 1.5px dashed var(--border); border-radius: 8px; padding: 16px; margin-top: 4px; background: #fafafa; }
+    .lot2-box .section-label { margin-top: 0; color: var(--green); }
+    .btn-add-lot {
+      display: flex; align-items: center; gap: 8px;
+      background: none; border: 1.5px solid var(--green); color: var(--green);
+      border-radius: 6px; padding: 8px 14px; font-size: 12px; font-weight: 700;
+      cursor: pointer; margin-top: 8px; transition: background .15s;
     }
-
-    input[type="text"]:focus,
-    select:focus {
-      outline: none;
-      border-color: var(--green);
-      box-shadow: 0 0 0 3px rgba(0,156,116,.12);
+    .btn-add-lot:hover { background: var(--green-pale); }
+    .btn-remove-lot {
+      display: flex; align-items: center; gap: 6px;
+      background: none; border: none; color: #999; font-size: 11px; cursor: pointer;
+      margin-top: 8px; padding: 4px 0;
     }
-
-    input.invalid, select.invalid {
-      border-color: var(--error);
-      box-shadow: 0 0 0 3px rgba(220,38,38,.10);
-    }
+    .btn-remove-lot:hover { color: var(--error); }
 
     /* ── Zone devis ── */
-    .drop-zone {
-      border: 2px dashed var(--border);
-      border-radius: 8px;
-      padding: 30px 20px;
-      text-align: center;
-      cursor: pointer;
-      position: relative;
-      transition: border-color .2s, background .2s;
-      margin-bottom: 4px;
-    }
-
-    .drop-zone:hover,
-    .drop-zone.over {
-      border-color: var(--green);
-      background: var(--green-pale);
-    }
-
-    .drop-zone.has-file {
-      border-color: var(--green);
-      background: var(--green-pale);
-    }
-
-    .drop-zone input[type="file"] {
-      position: absolute;
-      inset: 0;
-      opacity: 0;
-      cursor: pointer;
-      width: 100%;
-      height: 100%;
-    }
-
-    .drop-icon { font-size: 28px; margin-bottom: 8px; }
+    .drop-zone { border: 2px dashed var(--border); border-radius: 8px; padding: 26px 20px; text-align: center; cursor: pointer; position: relative; transition: border-color .2s, background .2s; }
+    .drop-zone:hover, .drop-zone.over { border-color: var(--green); background: var(--green-pale); }
+    .drop-zone.has-file { border-color: var(--green); background: var(--green-pale); }
+    .drop-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .drop-icon { font-size: 26px; margin-bottom: 6px; }
     .drop-text { font-size: 13px; color: var(--muted); }
     .drop-text strong { color: var(--green); }
-    .drop-hint { font-size: 11px; color: #aaa; margin-top: 4px; }
-    .file-chosen { font-size: 13px; color: var(--green); font-weight: 600; margin-top: 8px; }
+    .drop-hint { font-size: 11px; color: #aaa; margin-top: 3px; }
+    .file-chosen { font-size: 12px; color: var(--green); font-weight: 600; margin-top: 6px; }
 
     /* ── Messages ── */
-    .msg {
-      display: none;
-      border-radius: 7px;
-      padding: 11px 15px;
-      font-size: 13px;
-      margin-top: 14px;
-    }
-
-    .msg-error {
-      background: var(--error-bg);
-      border: 1.5px solid #fca5a5;
-      color: var(--error);
-    }
-
-    .msg-success {
-      background: var(--green-pale);
-      border: 1.5px solid var(--green);
-      color: var(--green-dark);
-      text-align: center;
-      font-weight: 600;
-    }
-
-    /* ── Loader ── */
-    #loader {
-      display: none;
-      text-align: center;
-      padding: 28px 0 12px;
-    }
-
-    .spinner {
-      width: 38px; height: 38px;
-      border: 4px solid #ddd;
-      border-top-color: var(--green);
-      border-radius: 50%;
-      animation: spin .85s linear infinite;
-      margin: 0 auto 14px;
-    }
-
+    .msg { display: none; border-radius: 7px; padding: 11px 15px; font-size: 13px; margin-top: 14px; }
+    .msg-error   { background: var(--error-bg); border: 1.5px solid #fca5a5; color: var(--error); }
+    .msg-success { background: var(--green-pale); border: 1.5px solid var(--green); color: var(--green-dark); text-align: center; font-weight: 600; }
+    #loader { display: none; text-align: center; padding: 26px 0 10px; }
+    .spinner { width: 36px; height: 36px; border: 4px solid #ddd; border-top-color: var(--green); border-radius: 50%; animation: spin .85s linear infinite; margin: 0 auto 12px; }
     @keyframes spin { to { transform: rotate(360deg); } }
-
-    .loader-title { font-size: 14px; font-weight: 600; color: var(--text); }
-    .loader-sub   { font-size: 12px; color: var(--muted); margin-top: 5px; }
-
-    /* ── Bouton ── */
-    .btn-gen {
-      width: 100%;
-      margin-top: 22px;
-      padding: 14px;
-      background: var(--green);
-      color: #fff;
-      border: none;
-      border-radius: 7px;
-      font-size: 15px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: background .2s, opacity .2s;
-      letter-spacing: .01em;
-    }
-
+    .loader-title { font-size: 14px; font-weight: 600; }
+    .loader-sub   { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .btn-gen { width: 100%; margin-top: 20px; padding: 13px; background: var(--green); color: #fff; border: none; border-radius: 7px; font-size: 15px; font-weight: 700; cursor: pointer; transition: background .2s; font-family: inherit; }
     .btn-gen:hover:not(:disabled) { background: var(--green-dark); }
     .btn-gen:disabled { opacity: .6; cursor: not-allowed; }
-
-    /* ── Footer ── */
-    footer {
-      text-align: center;
-      padding: 16px;
-      font-size: 11px;
-      color: #aaa;
-    }
+    footer { text-align: center; padding: 14px; font-size: 11px; color: #aaa; }
+    @media (max-width: 520px) { .grid-2 { grid-template-columns: 1fr; } .card { padding: 22px 18px; } header { flex-wrap: wrap; } }
   </style>
 </head>
 <body>
@@ -260,122 +91,143 @@
 </header>
 
 <main>
-  <div class="card">
+<div class="card">
 
-    <!-- ── Chantier ── -->
-    <div class="section-label">Chantier</div>
+  <div class="section-label">Chantier</div>
 
-    <div class="grid grid-1">
-      <div>
-        <label for="nomChantier">Nom du chantier <span class="req">*</span></label>
-        <input type="text" id="nomChantier" placeholder="Ex : Construction de 4 villas mitoyennes Minergie" />
-      </div>
+  <div class="grid grid-1">
+    <div>
+      <label for="nomChantier">Nom du chantier <span class="req">*</span></label>
+      <input type="text" id="nomChantier" placeholder="Ex : Construction de 4 villas mitoyennes Minergie" />
     </div>
-    <div class="grid grid-1">
-      <div>
-        <label for="adresseProjet">Adresse complete du projet <span class="req">*</span></label>
-        <input type="text" id="adresseProjet" placeholder="Ex : Chemin de l'ORMET 68, 1024 Ecublens" />
-      </div>
-    </div>
-    <div class="grid grid-2">
-      <div>
-        <label for="cfcNumero">N° CFC <span class="req">*</span></label>
-        <input type="text" id="cfcNumero" placeholder="Ex : 230" />
-      </div>
-      <div>
-        <label for="cfcLibelle">Libelle CFC <span class="req">*</span></label>
-        <input type="text" id="cfcLibelle" placeholder="Ex : Installation electrique" />
-      </div>
-    </div>
-
-    <!-- ── Entreprise ── -->
-    <div class="section-label">Entreprise prestataire</div>
-
-    <div class="grid grid-2">
-      <div>
-        <label for="nomEntreprise">Nom de l'entreprise <span class="req">*</span></label>
-        <input type="text" id="nomEntreprise" placeholder="Ex : Capriati Freres Electricite" />
-      </div>
-      <div>
-        <label for="formeJuridique">Forme juridique <span class="req">*</span></label>
-        <select id="formeJuridique">
-          <option value="">-- Choisir --</option>
-          <option value="SA">SA</option>
-          <option value="Sarl">Sarl</option>
-          <option value="Autre">Autre</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- ── Devis ── -->
-    <div class="section-label">Devis de reference</div>
-
-    <div class="drop-zone" id="dropZone">
-      <input type="file" id="devisFile" accept=".pdf" />
-      <div class="drop-icon">📄</div>
-      <div class="drop-text"><strong>Cliquer pour choisir</strong> ou deposer ici</div>
-      <div class="drop-hint">Fichier PDF uniquement</div>
-      <div class="file-chosen" id="fileChosen"></div>
-    </div>
-
-    <!-- ── Messages et loader ── -->
-    <div class="msg msg-error"   id="msgError"></div>
-    <div class="msg msg-success" id="msgSuccess">
-      ✅ Contrat genere ! Votre telechargement demarre automatiquement.
-    </div>
-
-    <div id="loader">
-      <div class="spinner"></div>
-      <div class="loader-title">Generation du contrat en cours...</div>
-      <div class="loader-sub">L'IA analyse le devis et compose le document (30 a 60 secondes)</div>
-    </div>
-
-    <button class="btn-gen" id="btnGen" onclick="generer()">
-      Generer le contrat PDF
-    </button>
-
   </div>
+  <div class="grid grid-1">
+    <div>
+      <label for="adresseProjet">Adresse complete du projet <span class="req">*</span></label>
+      <input type="text" id="adresseProjet" placeholder="Ex : Chemin de l'ORMET 68, 1024 Ecublens" />
+    </div>
+  </div>
+
+  <div class="section-label">Entreprise prestataire</div>
+
+  <div class="grid grid-2">
+    <div>
+      <label for="nomEntreprise">Nom de l'entreprise <span class="req">*</span></label>
+      <input type="text" id="nomEntreprise" placeholder="Ex : E-ME Energies" />
+    </div>
+    <div>
+      <label for="formeJuridique">Forme juridique <span class="req">*</span></label>
+      <select id="formeJuridique">
+        <option value="">-- Choisir --</option>
+        <option value="SA">SA</option>
+        <option value="Sarl">Sarl</option>
+        <option value="Autre">Autre</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="section-label">Lot(s) CFC</div>
+
+  <!-- Lot 1 -->
+  <div class="grid grid-2" style="margin-bottom:4px;">
+    <div>
+      <label for="cfcNumero1">Lot 1 — N° CFC <span class="req">*</span></label>
+      <input type="text" id="cfcNumero1" placeholder="Ex : 230" />
+    </div>
+    <div>
+      <label for="cfcLibelle1">Lot 1 — Libelle CFC <span class="req">*</span></label>
+      <input type="text" id="cfcLibelle1" placeholder="Ex : Installation electrique" />
+    </div>
+  </div>
+
+  <!-- Bouton ajouter lot 2 -->
+  <button class="btn-add-lot" id="btnAddLot" onclick="toggleLot2(true)">
+    ➕ Ajouter un 2eme lot (si le PDF contient 2 devis distincts)
+  </button>
+
+  <!-- Lot 2 (masque par defaut) -->
+  <div class="lot2-box" id="lot2Box" style="display:none; margin-top:12px;">
+    <div class="section-label" style="font-size:10px;">Lot 2</div>
+    <div class="grid grid-2">
+      <div>
+        <label for="cfcNumero2">Lot 2 — N° CFC</label>
+        <input type="text" id="cfcNumero2" placeholder="Ex : 274" />
+      </div>
+      <div>
+        <label for="cfcLibelle2">Lot 2 — Libelle CFC</label>
+        <input type="text" id="cfcLibelle2" placeholder="Ex : Installation photovoltaique" />
+      </div>
+    </div>
+    <button class="btn-remove-lot" onclick="toggleLot2(false)">✕ Supprimer le lot 2</button>
+  </div>
+
+  <div class="section-label" style="margin-top:20px;">Devis de reference</div>
+
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="devisFile" accept=".pdf" />
+    <div class="drop-icon">📄</div>
+    <div class="drop-text"><strong>Cliquer pour choisir</strong> ou deposer ici</div>
+    <div class="drop-hint">PDF uniquement · 1 ou 2 devis dans le meme fichier</div>
+    <div class="file-chosen" id="fileChosen"></div>
+  </div>
+
+  <div class="msg msg-error"   id="msgError"></div>
+  <div class="msg msg-success" id="msgSuccess">
+    ✅ Contrat(s) genere(s) ! Votre telechargement demarre automatiquement.
+  </div>
+
+  <div id="loader">
+    <div class="spinner"></div>
+    <div class="loader-title">Generation en cours...</div>
+    <div class="loader-sub" id="loaderSub">L'IA analyse le devis et compose le document (30 a 60 s)</div>
+  </div>
+
+  <button class="btn-gen" id="btnGen" onclick="generer()">
+    Generer le contrat PDF
+  </button>
+
+</div>
 </main>
 
 <footer>Legato SA · Outil interne · Usage reserve aux directeurs de travaux</footer>
 
 <script>
-  /* ── Drag & drop ── */
+  let lot2Visible = false;
+
+  function toggleLot2(show) {
+    lot2Visible = show;
+    document.getElementById('lot2Box').style.display   = show ? 'block' : 'none';
+    document.getElementById('btnAddLot').style.display = show ? 'none'  : 'flex';
+    if (!show) {
+      document.getElementById('cfcNumero2').value = '';
+      document.getElementById('cfcLibelle2').value = '';
+      ['cfcNumero2','cfcLibelle2'].forEach(id => document.getElementById(id).classList.remove('invalid'));
+    }
+  }
+
+  // Drag & drop
   const dropZone   = document.getElementById('dropZone');
   const fileInput  = document.getElementById('devisFile');
   const fileChosen = document.getElementById('fileChosen');
 
   fileInput.addEventListener('change', () => {
     const f = fileInput.files[0];
-    if (f) {
-      fileChosen.textContent = 'Fichier choisi : ' + f.name;
-      dropZone.classList.add('has-file');
-    }
+    if (f) { fileChosen.textContent = 'Fichier : ' + f.name; dropZone.classList.add('has-file'); }
   });
-
-  dropZone.addEventListener('dragover', e => {
-    e.preventDefault();
-    dropZone.classList.add('over');
-  });
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
   dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
   dropZone.addEventListener('drop', e => {
-    e.preventDefault();
-    dropZone.classList.remove('over');
+    e.preventDefault(); dropZone.classList.remove('over');
     const f = e.dataTransfer.files[0];
     if (f && f.type === 'application/pdf') {
-      const dt = new DataTransfer();
-      dt.items.add(f);
-      fileInput.files = dt.files;
-      fileChosen.textContent = 'Fichier choisi : ' + f.name;
-      dropZone.classList.add('has-file');
+      const dt = new DataTransfer(); dt.items.add(f); fileInput.files = dt.files;
+      fileChosen.textContent = 'Fichier : ' + f.name; dropZone.classList.add('has-file');
     }
   });
 
-  /* ── Messages ── */
   function showError(msg) {
     const el = document.getElementById('msgError');
-    el.textContent = msg;
-    el.style.display = 'block';
+    el.textContent = msg; el.style.display = 'block';
     document.getElementById('msgSuccess').style.display = 'none';
   }
   function clearMsg() {
@@ -383,76 +235,86 @@
     document.getElementById('msgSuccess').style.display = 'none';
   }
 
-  /* ── Validation ── */
-  const CHAMPS = [
-    { id: 'nomChantier',   label: 'Nom du chantier' },
-    { id: 'adresseProjet', label: 'Adresse du projet' },
-    { id: 'cfcNumero',     label: 'N deg CFC' },
-    { id: 'cfcLibelle',    label: 'Libelle CFC' },
-    { id: 'nomEntreprise', label: "Nom de l'entreprise" },
-    { id: 'formeJuridique',label: 'Forme juridique' },
-  ];
+  async function generer() {
+    clearMsg();
 
-  function valider() {
+    // Reset validations
+    const tousLesChamps = ['nomChantier','adresseProjet','nomEntreprise','formeJuridique','cfcNumero1','cfcLibelle1','cfcNumero2','cfcLibelle2'];
+    tousLesChamps.forEach(id => document.getElementById(id).classList.remove('invalid'));
+
+    // Validation
     let ok = true;
-    for (const { id, label } of CHAMPS) {
-      const el  = document.getElementById(id);
-      const val = el.value.trim();
-      el.classList.remove('invalid');
-      if (!val) {
+    const oblig = ['nomChantier','adresseProjet','nomEntreprise','formeJuridique','cfcNumero1','cfcLibelle1'];
+    const labels = {
+      nomChantier:'Nom du chantier', adresseProjet:'Adresse du projet',
+      nomEntreprise:"Nom de l'entreprise", formeJuridique:'Forme juridique',
+      cfcNumero1:'Lot 1 — N° CFC', cfcLibelle1:'Lot 1 — Libelle CFC',
+      cfcNumero2:'Lot 2 — N° CFC', cfcLibelle2:'Lot 2 — Libelle CFC',
+    };
+
+    for (const id of oblig) {
+      const el = document.getElementById(id);
+      if (!el.value.trim()) {
         el.classList.add('invalid');
-        if (ok) { showError('Champ obligatoire : ' + label); }
+        if (ok) showError('Champ obligatoire : ' + labels[id]);
         ok = false;
       }
     }
+
+    // Si lot 2 visible, ses champs sont aussi obligatoires
+    if (lot2Visible) {
+      for (const id of ['cfcNumero2','cfcLibelle2']) {
+        const el = document.getElementById(id);
+        if (!el.value.trim()) {
+          el.classList.add('invalid');
+          if (ok) showError('Champ obligatoire : ' + labels[id]);
+          ok = false;
+        }
+      }
+    }
+
     if (!fileInput.files[0]) {
       if (ok) showError('Veuillez deposer le devis PDF.');
       ok = false;
     }
-    return ok;
-  }
 
-  /* ── Envoi ── */
-  async function generer() {
-    clearMsg();
+    if (!ok) return;
 
-    // Retirer les marqueurs d'erreur
-    CHAMPS.forEach(({ id }) => document.getElementById(id).classList.remove('invalid'));
-
-    if (!valider()) return;
-
-    const btn    = document.getElementById('btnGen');
-    const loader = document.getElementById('loader');
-    btn.disabled    = true;
-    loader.style.display = 'block';
+    const btn = document.getElementById('btnGen');
+    const sub = document.getElementById('loaderSub');
+    btn.disabled = true;
+    document.getElementById('loader').style.display = 'block';
+    sub.textContent = lot2Visible
+      ? "L'IA detecte les 2 devis et compose les 2 contrats (60-90 s)"
+      : "L'IA analyse le devis et compose le document (30-60 s)";
 
     try {
       const fd = new FormData();
       fd.append('nomChantier',    document.getElementById('nomChantier').value.trim());
       fd.append('adresseProjet',  document.getElementById('adresseProjet').value.trim());
-      fd.append('cfcNumero',      document.getElementById('cfcNumero').value.trim());
-      fd.append('cfcLibelle',     document.getElementById('cfcLibelle').value.trim());
       fd.append('nomEntreprise',  document.getElementById('nomEntreprise').value.trim());
       fd.append('formeJuridique', document.getElementById('formeJuridique').value.trim());
-      fd.append('devis',          fileInput.files[0]);
+      fd.append('cfcNumero1',     document.getElementById('cfcNumero1').value.trim());
+      fd.append('cfcLibelle1',    document.getElementById('cfcLibelle1').value.trim());
+      if (lot2Visible) {
+        fd.append('cfcNumero2',   document.getElementById('cfcNumero2').value.trim());
+        fd.append('cfcLibelle2',  document.getElementById('cfcLibelle2').value.trim());
+      }
+      fd.append('devis', fileInput.files[0]);
 
       const resp = await fetch('/api/generer', { method: 'POST', body: fd });
-
       if (!resp.ok) {
-        const err = await resp.json().catch(() => ({ error: 'Erreur serveur (' + resp.status + ')' }));
+        const err = await resp.json().catch(() => ({ error: 'Erreur serveur ' + resp.status }));
         throw new Error(err.error || 'Erreur ' + resp.status);
       }
 
       const blob = await resp.blob();
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement('a');
-      const nom  = document.getElementById('nomEntreprise').value.trim().replace(/\s+/g, '_');
-      const cfc  = document.getElementById('cfcNumero').value.trim();
-      a.href     = url;
-      a.download = `Contrat_${nom}_CFC${cfc}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      const nom  = document.getElementById('nomEntreprise').value.trim().replace(/\s+/g,'_');
+      a.href = url;
+      a.download = `Contrat_${nom}.pdf`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 5000);
 
       document.getElementById('msgSuccess').style.display = 'block';
@@ -460,7 +322,7 @@
     } catch (e) {
       showError('Erreur : ' + e.message);
     } finally {
-      loader.style.display = 'none';
+      document.getElementById('loader').style.display = 'none';
       btn.disabled = false;
     }
   }
