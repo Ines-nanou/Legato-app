@@ -386,14 +386,29 @@ module.exports = async (req, res) => {
     const fichePdf = await PDFDocument.load(ficheBytes);
     (await pdfDoc.copyPages(fichePdf, fichePdf.getPageIndices())).forEach(p => pdfDoc.addPage(p));
 
-    // 3+. Contrats par lot x2 exemplaires
+    // Annexe optionnelle (même PDF inséré après chaque exemplaire)
+    const annexeBuffer = files.annexe && files.annexe.length > 0 ? files.annexe : null;
+
+    // 3+. Contrats par lot x2 exemplaires, avec annexe après chacun
     for (let i = 0; i < lots.length; i++) {
       const lot = lots[i];
       const infoDevis = infos.devis[i];
+
+      // Exemplaire 1
       await pageContratRecto(pdfDoc, fonts, logoImg, infoDevis, infos, lot, fd);
       await pageContratVerso(pdfDoc, fonts, infoDevis, infos, lot, fd);
+      if (annexeBuffer) {
+        const ax1 = await PDFDocument.load(annexeBuffer);
+        (await pdfDoc.copyPages(ax1, ax1.getPageIndices())).forEach(p => pdfDoc.addPage(p));
+      }
+
+      // Exemplaire 2
       await pageContratRecto(pdfDoc, fonts, logoImg, infoDevis, infos, lot, fd);
       await pageContratVerso(pdfDoc, fonts, infoDevis, infos, lot, fd);
+      if (annexeBuffer) {
+        const ax2 = await PDFDocument.load(annexeBuffer);
+        (await pdfDoc.copyPages(ax2, ax2.getPageIndices())).forEach(p => pdfDoc.addPage(p));
+      }
     }
 
     // Conditions générales
