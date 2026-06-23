@@ -367,9 +367,14 @@ module.exports = async (req, res) => {
     const logoPath   = path.join(assetsDir, 'logo_legato.png');
     const logoBytes  = fs.existsSync(logoPath) ? fs.readFileSync(logoPath) : null;
 
-    // Polices TTF (avec accents)
-    const regularTTF = fs.readFileSync(path.join(assetsDir, 'Lato-Regular.ttf'));
-    const boldTTF    = fs.readFileSync(path.join(assetsDir, 'Lato-Bold.ttf'));
+    // Polices TTF (avec accents) — debug logs
+    console.log('assetsDir:', assetsDir);
+    console.log('Lato-Regular existe:', fs.existsSync(path.join(assetsDir, 'Lato-Regular.ttf')));
+    console.log('Lato-Bold existe:', fs.existsSync(path.join(assetsDir, 'Lato-Bold.ttf')));
+    const regularTTF = new Uint8Array(fs.readFileSync(path.join(assetsDir, 'Lato-Regular.ttf')));
+    const boldTTF    = new Uint8Array(fs.readFileSync(path.join(assetsDir, 'Lato-Bold.ttf')));
+    console.log('regularTTF size:', regularTTF.length);
+    console.log('boldTTF size:', boldTTF.length);
 
     const pdfDoc = await PDFDocument.create();
     const B = await pdfDoc.embedFont(boldTTF);
