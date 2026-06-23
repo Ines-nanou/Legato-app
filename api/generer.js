@@ -3,6 +3,7 @@
 const path = require('path');
 const fs   = require('fs');
 const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
+const fontkit = require('@pdf-lib/fontkit');
 
 module.exports.config = { api: { bodyParser: false, responseLimit: '50mb' } };
 
@@ -377,6 +378,7 @@ module.exports = async (req, res) => {
     console.log('boldTTF size:', boldTTF.length);
 
     const pdfDoc = await PDFDocument.create();
+    pdfDoc.registerFontkit(fontkit);
     const B = await pdfDoc.embedFont(boldTTF);
     const R = await pdfDoc.embedFont(regularTTF);
     const fonts = { B, R };
