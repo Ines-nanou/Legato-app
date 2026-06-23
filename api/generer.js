@@ -47,6 +47,7 @@ async function extraireInfosDevis(buf, nbLots) {
   const instrManuscrit = `RÈGLE IMPORTANTE sur les montants manuscrits : Si un montant imprimé est barré et qu'un montant est réécrit à la main à côté ou en dessous, tu dois TOUJOURS utiliser le montant manuscrit et ignorer le montant barré. Par exemple si "CHF 40'044.80" est barré et que "CHF 40'000.-" est écrit à la main, le montant à retenir est CHF 40'000.00.`;
 
   const promptUnique = `Extrais les informations de ce devis. ${instrManuscrit}
+RÈGLE ARRÊTÉ : Si le devis contient un montant "arrêté" ou "total arrêté" — qu'il soit écrit à la main OU imprimé informatiquement — ajoute une ligne "Total arrêté TTC" avec ce montant.
 Retourne UNIQUEMENT un JSON valide sans markdown :
 {
   "adresseEntreprise": "rue et numéro de l'entreprise",
@@ -61,14 +62,16 @@ Retourne UNIQUEMENT un JSON valide sans markdown :
         { "label": "Remise X%", "montant": "- X'XXX.XX", "bold": false },
         { "label": "Montant hors taxes", "montant": "X'XXX.XX", "bold": true },
         { "label": "TVA 8.1%", "montant": "X'XXX.XX", "bold": false },
-        { "label": "Total", "montant": "X'XXX.XX", "bold": true }
+        { "label": "Total TTC", "montant": "X'XXX.XX", "bold": true },
+        { "label": "Total arrêté TTC", "montant": "X'XXX.XX", "bold": true }
       ]
     }
   ]
 }
-Inclure uniquement les lignes financières présentes. Ne jamais inventer.`;
+Inclure "Total arrêté TTC" UNIQUEMENT si un arrêté manuscrit est présent. Inclure uniquement les lignes financières présentes. Ne jamais inventer.`;
 
   const promptDouble = `Ce PDF contient 2 devis distincts de la même entreprise. ${instrManuscrit}
+RÈGLE ARRÊTÉ : Si un devis contient un montant "arrêté" ou "total arrêté" — qu'il soit écrit à la main OU imprimé informatiquement — ajoute une ligne "Total arrêté TTC" avec ce montant pour ce devis.
 Retourne UNIQUEMENT un JSON valide sans markdown :
 {
   "adresseEntreprise": "rue et numéro",
@@ -83,7 +86,8 @@ Retourne UNIQUEMENT un JSON valide sans markdown :
         { "label": "Remise X%", "montant": "- X'XXX.XX", "bold": false },
         { "label": "Montant hors taxes", "montant": "X'XXX.XX", "bold": true },
         { "label": "TVA 8.1%", "montant": "X'XXX.XX", "bold": false },
-        { "label": "Total", "montant": "X'XXX.XX", "bold": true }
+        { "label": "Total TTC", "montant": "X'XXX.XX", "bold": true },
+        { "label": "Total arrêté TTC", "montant": "X'XXX.XX", "bold": true }
       ]
     },
     {
@@ -92,13 +96,13 @@ Retourne UNIQUEMENT un JSON valide sans markdown :
       "lignesFinancieres": [
         { "label": "Montant total brut", "montant": "X'XXX.XX", "bold": true },
         { "label": "TVA 8.1%", "montant": "X'XXX.XX", "bold": false },
-        { "label": "Total", "montant": "X'XXX.XX", "bold": true }
+        { "label": "Total TTC", "montant": "X'XXX.XX", "bold": true }
       ]
     }
   ]
 }
-Premier élément = premier devis dans le PDF. Deuxième = deuxième devis.
-Inclure uniquement les lignes présentes. Ne jamais inventer.`;
+Inclure "Total arrêté TTC" UNIQUEMENT si un arrêté manuscrit est présent pour ce devis.
+Premier élément = premier devis. Deuxième = deuxième devis. Ne jamais inventer.`;
 
   const resp = await client.messages.create({
     model: 'claude-sonnet-4-6',
