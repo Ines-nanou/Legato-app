@@ -176,6 +176,12 @@ async function pageLettreGarde(pdfDoc, fonts, logoImg, infos, fd) {
   const { R, B } = fonts;
   const page = pdfDoc.addPage([PW, PH]);
 
+  // Logo haut droite — calcul de sa hauteur reelle pour positionner l'adresse dessous
+  let logoBottomY = PH - 30;
+  if (logoImg) {
+    const scale = Math.min(85 / logoImg.width, 85 / logoImg.height);
+    logoBottomY = PH - 30 - (logoImg.height * scale);
+  }
   drawLogo(page, logoImg, MR, PH - 30, 85);
 
   let y = PH - 50;
@@ -184,8 +190,8 @@ async function pageLettreGarde(pdfDoc, fonts, logoImg, infos, fd) {
   page.drawText('1400 Yverdon-les-Bains', { x: ML, y, font: R, size: 9, color: BLACK }); y -= 12;
   page.drawText('024 426 77 00  ·  info@legato-eg.ch', { x: ML, y, font: R, size: 9, color: BLACK });
 
-  // Adresse destinataire remontee de ~3.5cm par rapport a avant
-  let ey = PH - 115;
+  // Adresse destinataire sous le logo + decalage supplementaire, a droite, police 12pt
+  let ey = logoBottomY - 70;
   const nomComplet = `${fd.nomEntreprise} ${fd.formeJuridique}`;
   page.drawText(nomComplet, { x: 340, y: ey, font: B, size: 12, color: BLACK }); ey -= 16;
   if (infos.adresseEntreprise)  { page.drawText(infos.adresseEntreprise,  { x: 340, y: ey, font: R, size: 12, color: BLACK }); ey -= 15; }
